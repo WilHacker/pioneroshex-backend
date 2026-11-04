@@ -2,19 +2,30 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
     commit-message:
       prefix: chore
       include: scope
     groups:
-      desarrollo:
-        dependency-type: development
-      produccion:
-        dependency-type: production
+      # Las tres piezas de Prisma están fijadas a la misma versión: se actualizan juntas.
+      prisma:
+        patterns: ['prisma', '@prisma/*']
+      # Solo minor y patch van agrupados; las versiones mayores llegan en PR propio.
+      minor-y-patch:
+        update-types: ['minor', 'patch']
+    ignore:
+      # El CLI de Nest aún no soporta TypeScript 7 (la API del compilador vuelve en 7.1).
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # Debe seguir la versión de Node del proyecto (.nvmrc).
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
     commit-message:
@@ -23,6 +34,7 @@ updates:
 
   - package-ecosystem: docker
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
     commit-message:
