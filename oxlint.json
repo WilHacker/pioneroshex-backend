@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "rules": {
+    "no-console": "error",
+    "eqeqeq": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extraneous-class": ["warn", { "allowWithDecorator": true }]
+  },
+  "env": {
+    "node": true
+  },
+  "ignorePatterns": ["dist", "coverage", "node_modules"]
+}

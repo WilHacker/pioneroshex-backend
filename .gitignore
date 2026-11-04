@@ -1,0 +1,20 @@
+# Dependencias y compilación
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Entorno (solo se versiona .env.example)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+pnpm-debug.log*
+
+# Editor y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
