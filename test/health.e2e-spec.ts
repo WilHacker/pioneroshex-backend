@@ -18,6 +18,9 @@ describe('GET /health (e2e)', () => {
   });
 
   it('responde 200 con estado ok', async () => {
-    await request(app.getHttpServer()).get('/health').expect(200).expect({ estado: 'ok' });
+    await request(app.getHttpServer())
+      .get('/health')
+      .expect(200)
+      .expect({ estado: 'ok', baseDatos: 'ok' });
   });
 });

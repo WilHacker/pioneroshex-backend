@@ -17,6 +17,24 @@ jobs:
     name: Calidad (lint, tipos, tests, build)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # PostgreSQL real para el e2e y el smoke test (/health consulta la base de datos)
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/test
+      FRONTEND_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

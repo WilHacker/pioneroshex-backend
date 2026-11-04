@@ -14,7 +14,6 @@ if (build.status !== 0) {
 const servidor = spawn('node', ['dist/main'], {
   stdio: 'inherit',
   env: {
-    DATABASE_URL: 'postgresql://smoke:smoke@localhost:5432/smoke',
     FRONTEND_URL: 'http://localhost:3000',
     ...process.env,
     NODE_ENV: 'production',

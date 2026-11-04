@@ -6,14 +6,15 @@ WORKDIR /app
 
 # Dependencias completas + compilación
 FROM base AS build
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
-RUN pnpm build
+# El cliente de Prisma no está en git: se genera antes de compilar.
+RUN pnpm exec prisma generate && pnpm build
 
 # Solo dependencias de producción
 FROM base AS prod-deps
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Imagen final ligera, sin pnpm ni código fuente
