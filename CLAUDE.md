@@ -22,16 +22,46 @@ datos, también `test:e2e`.
 - Husky corre lint-staged (pre-commit), commitlint (commit-msg) y typecheck + test (pre-push).
   Nunca usar `--no-verify`.
 
-## Arquitectura
+## Arquitectura (decidida el 2026-11-04)
+
+**Monolito modular con núcleo puro** (puertos y adaptadores en versión ligera) y **un actor por
+partida**.
 
 ```
-src/config/   variables de entorno validadas con Zod (falla al arrancar si algo falta)
-src/infra/    adaptadores externos (prisma/)
-src/modules/  funcionalidades de Nest (health/, luego salas, juego...)
-src/core/     TypeScript PURO del juego (aún no existe)
+src/core/      reglas del juego, TypeScript PURO (aún no existe)
+src/schemas/   contrato de red con Zod (aún no existe)
+src/modules/   entrada: gateways y casos de uso de Nest (health/, luego salas, juego...)
+src/infra/     salida: Prisma hoy; Redis y colas después
+src/config/    variables de entorno validadas con Zod (falla al arrancar si algo falta)
 ```
 
-- `core/` **no importa nada de Nest, `infra/` ni `modules/`**. Se prueba sin levantar nada.
+Dependencias permitidas (`→` = "puede importar de"): `modules → core, schemas, infra` ·
+`schemas → core` · `infra → core` · `core → nada del proyecto`.
+
+**Las hace cumplir el lint** (`no-restricted-imports` en `oxlint.json`, probado con archivos
+buenos y malos):
+
+- `core/` no importa Nest, Prisma, socket.io, Redis ni BullMQ, ni `infra/`, `modules/`,
+  `schemas/`, `config/` o `generated/`.
+- `infra/` no importa `modules/`.
+
+**Solo por revisión** (el lint no las detecta): un módulo no importa de otro módulo; `core/` no usa
+`Math.random` ni `Date.now` (el azar es determinista, con semilla); sin ciclos de importación.
+
+Diseño del juego:
+
+- **Un actor por partida:** cada partida es un objeto en memoria que procesa **una acción a la
+  vez** (cola por sala), así no hay carreras. Se guarda una instantánea; Redis se añade para
+  reconexión y varias instancias.
+- **Flujo de una jugada:** evento → Zod valida la forma → `core` valida las reglas y devuelve el
+  estado nuevo (reductor, sin mutar) → se guarda → vista filtrada por jugador → parches por socket.
+- **Registro de eventos (event sourcing):** no se hace ahora, pero el diseño no lo impide: se
+  añade encima sin reescribir. Definir los eventos antes de escribir el reductor.
+- **Alternativas descartadas:** boardgame.io y Colyseus. Traen fases, secretos y reconexión hechos,
+  pero imponen su modelo de estado, y este juego tiene mapas dinámicos, de 2 a 10 jugadores,
+  comercio asíncrono y temporizadores. Reconsiderar si escribir reconexión y filtrado a mano
+  resulta demasiado caro.
+
 - Imports **relativos con extensión `.js`** (es ESM). Sin alias de rutas: `tsc` no los reescribe
   y en `dist/` fallarían aunque los tests pasen.
 - El servidor es la única fuente de verdad. Todo evento entrante se valida con Zod, y a cada

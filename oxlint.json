@@ -16,5 +16,49 @@
   "env": {
     "node": true
   },
-  "ignorePatterns": ["dist", "coverage", "node_modules", "src/generated"]
+  "ignorePatterns": ["dist", "coverage", "node_modules", "src/generated"],
+  "overrides": [
+    {
+      "files": ["src/core/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@nestjs/*", "@prisma/*", "socket.io*", "ioredis", "bullmq"],
+                "message": "core/ es TypeScript puro: no puede importar frameworks ni adaptadores."
+              },
+              {
+                "group": [
+                  "**/infra/**",
+                  "**/modules/**",
+                  "**/schemas/**",
+                  "**/config/**",
+                  "**/generated/**"
+                ],
+                "message": "core/ no puede depender de infra/, modules/, schemas/, config/ ni del cliente generado."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/infra/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/modules/**"],
+                "message": "infra/ no puede depender de modules/."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }
