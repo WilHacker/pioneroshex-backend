@@ -20,3 +20,6 @@ pnpm-debug.log*
 Thumbs.db
 
 /src/generated/prisma
+
+# Playwright MCP (capturas y logs de las pruebas en el navegador)
+.playwright-mcp/
