@@ -82,6 +82,10 @@ Diseño del juego:
 - Coordenadas cúbicas `(q, r, s)`, `q + r + s = 0`, hexágonos _pointy-top_.
 - Para radio R: casillas `3R(R+1)+1`, vértices `6(R+1)²`, aristas `9R²+15R+6`.
   R=2 → **19, 54 y 72**. La fórmula de aristas del informe original (`9R(R+1)+6`) es incorrecta.
+- Un **puerto** es una arista costera (protege sus 2 vértices), no un vértice suelto. Costa de
+  radio R: `12R+6` aristas. Tipos: `GENERICO` (3:1) o un recurso (2:1); sin puerto, 4:1.
+- Azar en `core/`: un flujo por tema (`semilla`, `semilla:puertos`...) con `crearRng` de
+  `reglas/azar.ts`, para que añadir un tema nuevo no cambie el reparto de los existentes.
 - Eventos de socket en español (`juego:construirCamino`): nombres **provisionales**.
 
 ## Trampas conocidas

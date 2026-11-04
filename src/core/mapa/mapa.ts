@@ -82,3 +82,40 @@ export function crearMapa(radio: number): Mapa {
 
   return { radio, casillas, vertices, aristas: [...aristas.values()] };
 }
+
+/**
+ * Las aristas del borde del tablero (las que tocan una sola casilla), en orden alrededor del
+ * perímetro: cada una comparte un vértice con la siguiente y la última cierra con la primera.
+ * El punto de partida y el sentido son arbitrarios pero deterministas.
+ */
+export function aristasCosteras(mapa: Mapa): readonly Arista[] {
+  const porId = new Map(mapa.vertices.map((v) => [v.id, v]));
+  const esCostera = (arista: Arista): boolean => {
+    const [x, y] = arista.vertices.map((id) => (porId.get(id)?.casillas ?? []).map(clave));
+    return x.filter((c) => y.includes(c)).length === 1;
+  };
+
+  const costeras = mapa.aristas.filter(esCostera);
+  if (costeras.length === 0) return [];
+
+  const porVertice = new Map<string, Arista[]>();
+  for (const arista of costeras) {
+    for (const v of arista.vertices) porVertice.set(v, [...(porVertice.get(v) ?? []), arista]);
+  }
+
+  const orden: Arista[] = [costeras[0]];
+  const visitadas = new Set([costeras[0].id]);
+  let extremo = costeras[0].vertices[1];
+  while (orden.length < costeras.length) {
+    const siguiente = (porVertice.get(extremo) ?? []).find((a) => !visitadas.has(a.id));
+    if (!siguiente) throw new Error('El borde del mapa no forma un ciclo cerrado');
+    orden.push(siguiente);
+    visitadas.add(siguiente.id);
+    extremo = siguiente.vertices[0] === extremo ? siguiente.vertices[1] : siguiente.vertices[0];
+  }
+  // Recorrer todas las aristas no basta: un camino abierto también se recorre entero.
+  if (extremo !== costeras[0].vertices[0]) {
+    throw new Error('El borde del mapa no forma un ciclo cerrado');
+  }
+  return orden;
+}

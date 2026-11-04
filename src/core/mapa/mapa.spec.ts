@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { casillasPorRadio, clave, hex } from './coordenadas.js';
-import { crearMapa, verticesDeCasilla } from './mapa.js';
+import { aristasCosteras, crearMapa, verticesDeCasilla } from './mapa.js';
 
 const RADIOS = [0, 1, 2, 3, 4, 5];
 
@@ -97,6 +97,50 @@ describe('crearMapa (propiedades)', () => {
         });
       }),
     );
+  });
+});
+
+describe('aristasCosteras', () => {
+  it.each(RADIOS)('radio %i tiene 12R+6 aristas costeras sin repetir', (R) => {
+    const costeras = aristasCosteras(crearMapa(R));
+    expect(costeras).toHaveLength(12 * R + 6);
+    expect(new Set(costeras.map((a) => a.id)).size).toBe(costeras.length);
+  });
+
+  it.each(RADIOS)('radio %i: cada arista toca una sola casilla', (R) => {
+    const mapa = crearMapa(R);
+    const porId = new Map(mapa.vertices.map((v) => [v.id, v]));
+    for (const arista of aristasCosteras(mapa)) {
+      const [x, y] = arista.vertices.map((id) => (porId.get(id)?.casillas ?? []).map(clave));
+      expect(x.filter((c) => y.includes(c))).toHaveLength(1);
+    }
+  });
+
+  it.each(RADIOS)('radio %i: van en orden y forman un ciclo cerrado', (R) => {
+    const costeras = aristasCosteras(crearMapa(R));
+    costeras.forEach((arista, i) => {
+      const siguiente = costeras[(i + 1) % costeras.length];
+      expect(siguiente.vertices.some((v) => arista.vertices.includes(v))).toBe(true);
+    });
+    const apariciones = new Map<string, number>();
+    for (const v of costeras.flatMap((a) => a.vertices)) {
+      apariciones.set(v, (apariciones.get(v) ?? 0) + 1);
+    }
+    expect([...apariciones.values()].every((n) => n === 2)).toBe(true);
+  });
+
+  it.each(RADIOS)('radio %i: sus extremos son exactamente los vértices costeros', (R) => {
+    const mapa = crearMapa(R);
+    const costeros = mapa.vertices.filter((v) => v.casillas.length < 3).map((v) => v.id);
+    const extremos = aristasCosteras(mapa).flatMap((a) => a.vertices);
+    expect(new Set(extremos)).toEqual(new Set(costeros));
+  });
+
+  it('lanza un error si el borde del mapa no es un ciclo cerrado', () => {
+    const mapa = crearMapa(1);
+    const [rota] = aristasCosteras(mapa);
+    const dañado = { ...mapa, aristas: mapa.aristas.filter((a) => a.id !== rota.id) };
+    expect(() => aristasCosteras(dañado)).toThrow(/ciclo/i);
   });
 });
 
