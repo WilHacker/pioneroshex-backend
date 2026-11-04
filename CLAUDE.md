@@ -28,7 +28,7 @@ datos, también `test:e2e`.
 partida**.
 
 ```
-src/core/      reglas del juego, TypeScript PURO (aún no existe)
+src/core/      reglas del juego, TypeScript PURO (hoy: mapa/ con coordenadas y geometría)
 src/schemas/   contrato de red con Zod (aún no existe)
 src/modules/   entrada: gateways y casos de uso de Nest (health/, luego salas, juego...)
 src/infra/     salida: Prisma hoy; Redis y colas después
@@ -93,6 +93,11 @@ Diseño del juego:
 - **Prisma 7:** la URL va en `prisma.config.ts`, no en el schema. El cliente se genera en
   `src/generated/` (ignorado por git); si falta, `pnpm db:generate`. `prisma`, `@prisma/client` y
   `@prisma/adapter-pg` van fijados a la misma versión. No usar la v8 (release candidate).
+- **`pure-rand` 8** (azar con semilla de `core/`): sin export por defecto; se importa por subruta
+  (`pure-rand/generator/xoroshiro128plus`, `pure-rand/distribution/uniformInt`). Por defecto
+  **muta** el generador; para uso puro envolver con `pure-rand/utils/purify`. La semilla es un
+  número: una semilla de texto (`"ANDES-2026"`) hay que convertirla a entero con un hash propio.
+  Sustituye a `seedrandom` (sin mantenimiento desde 2022). `Math.random` sigue prohibido en `core/`.
 - **Generadores que instalan cosas de terceros** (`prisma init`, `create-next-app`...): dejan
   skills o `AGENTS.md` en el repo. No ejecutarlos sin revisar y borrar lo que agreguen.
 - **Dockerfile sin corepack** (Node 25+ no lo trae). La versión de pnpm está en `ARG PNPM_VERSION`
