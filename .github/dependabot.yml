@@ -28,3 +28,7 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # Subir de versión mayor de Node se decide a mano, junto con .nvmrc y engines.
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']

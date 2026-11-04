@@ -1,5 +1,7 @@
 FROM node:24-alpine AS base
-RUN corepack enable
+# Misma versión que "packageManager" en package.json. No se usa corepack: Node 25+ ya no lo incluye.
+ARG PNPM_VERSION=11.25.0
+RUN npm install -g pnpm@${PNPM_VERSION}
 WORKDIR /app
 
 # Dependencias completas + compilación
