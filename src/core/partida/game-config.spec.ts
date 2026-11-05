@@ -8,6 +8,7 @@ describe('crearGameConfig', () => {
       radio: 2,
       turnRuleMode: 'A',
       robberHandLimit: 7,
+      puntosVictoria: 10,
     });
   });
 
@@ -18,6 +19,7 @@ describe('crearGameConfig', () => {
       radio: 1,
       turnRuleMode: 'B',
       robberHandLimit: 8,
+      puntosVictoria: 8,
     });
     expect(config).toEqual({
       semilla: 'X',
@@ -25,7 +27,12 @@ describe('crearGameConfig', () => {
       radio: 1,
       turnRuleMode: 'B',
       robberHandLimit: 8,
+      puntosVictoria: 8,
     });
+  });
+
+  it('respeta los puntos de victoria fijados', () => {
+    expect(crearGameConfig({ semilla: 'X', puntosVictoria: 12 }).puntosVictoria).toBe(12);
   });
 
   describe('valores por defecto según el número de jugadores', () => {
@@ -68,6 +75,10 @@ describe('crearGameConfig', () => {
       expect(() => crearGameConfig({ semilla: 'X', robberHandLimit })).toThrow(/robberHandLimit/);
     });
 
+    it.each([2, 2.5, Number.NaN, -1])('rechaza los puntos de victoria %s', (puntosVictoria) => {
+      expect(() => crearGameConfig({ semilla: 'X', puntosVictoria })).toThrow(/puntosVictoria/);
+    });
+
     it.each(['', '   '])('rechaza la semilla vacía %j', (semilla) => {
       expect(() => crearGameConfig({ semilla })).toThrow(/semilla/);
     });
@@ -81,6 +92,36 @@ describe('crearGameConfig', () => {
     it('rechaza un mapa que no alcanza para los jugadores (radio 0 = 1 casilla)', () => {
       expect(() => crearGameConfig({ semilla: 'X', jugadores: 4, radio: 0 })).toThrow(/radio/);
     });
+
+    // Cada poblado bloquea como mucho 4 vértices (el suyo y 3 vecinos): para que el último poblado
+    // de la preparación tenga sitio hacen falta más de 4·(2n−1) vértices.
+    it.each([
+      [0, 2],
+      [1, 4],
+      [2, 8],
+    ])(
+      'rechaza radio %i con %i jugadores (la preparación quedaría congelada)',
+      (radio, jugadores) => {
+        expect(() => crearGameConfig({ semilla: 'X', jugadores, radio })).toThrow(
+          /radio.*jugadores/,
+        );
+      },
+    );
+
+    it.each([
+      [1, 3],
+      [2, 7],
+      [3, 10],
+    ])('acepta radio %i con %i jugadores', (radio, jugadores) => {
+      expect(crearGameConfig({ semilla: 'X', jugadores, radio }).radio).toBe(radio);
+    });
+
+    it.each([2, 3, 4, 5, 6, 7, 8, 9, 10])(
+      'los valores por defecto con %i jugadores son válidos',
+      (jugadores) => {
+        expect(crearGameConfig({ semilla: 'X', jugadores }).jugadores).toBe(jugadores);
+      },
+    );
   });
 
   it('devuelve un objeto congelado y no toca la entrada', () => {
