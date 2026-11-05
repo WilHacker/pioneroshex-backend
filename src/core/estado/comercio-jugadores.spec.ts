@@ -117,6 +117,8 @@ describe('comercio entre jugadores', () => {
       expect(decision.ok).toBe(false);
       if (decision.ok) return;
       expect(decision.motivo).toBe('RECURSOS_INSUFICIENTES');
+      expect(decision.falta).toEqual({ MINERAL: 1 });
+      expect(decision.detalle).toEqual({ dueno: j0 });
     });
 
     it('rechaza si la fase no es FASE_PRINCIPAL', () => {
@@ -184,6 +186,8 @@ describe('comercio entre jugadores', () => {
       expect(decision.ok).toBe(false);
       if (decision.ok) return;
       expect(decision.motivo).toBe('RECURSOS_INSUFICIENTES');
+      expect(decision.falta).toEqual({ MINERAL: 5 });
+      expect(decision.detalle).toEqual({ dueno: j1 });
     });
 
     it('rechaza si el trato estaba dirigido a otro jugador', () => {

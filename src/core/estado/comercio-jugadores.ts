@@ -1,5 +1,17 @@
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
-import type { Accion, Decision, Estado, Trato } from './tipos.js';
+import { faltaPara } from './falta.js';
+import type { Accion, Decision, Estado, Rechazo, Trato } from './tipos.js';
+
+/** RECURSOS_INSUFICIENTES con lo que falta y de quién es la mano que no alcanza. */
+function sinRecursos(
+  jugador: { readonly id: string; readonly recursos: Readonly<Record<Recurso, number>> },
+  requerido: Readonly<Record<Recurso, number>>,
+): Rechazo | null {
+  const falta = faltaPara(jugador.recursos, requerido);
+  return falta
+    ? { ok: false, motivo: 'RECURSOS_INSUFICIENTES', falta, detalle: { dueno: jugador.id } }
+    : null;
+}
 
 function normalizar(parcial: Partial<Record<Recurso, number>>): Record<Recurso, number> {
   const res: Record<Recurso, number> = {
@@ -20,18 +32,6 @@ function normalizar(parcial: Partial<Record<Recurso, number>>): Record<Recurso, 
 
 function total(r: Record<Recurso, number>): number {
   return RECURSOS.reduce((acc, k) => acc + r[k], 0);
-}
-
-function tieneRecursos(
-  jugadorRecursos: Record<Recurso, number>,
-  requerido: Record<Recurso, number>,
-): boolean {
-  for (const r of RECURSOS) {
-    if (jugadorRecursos[r] < requerido[r]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 export function decidirProponerTrato(estado: Estado, accion: Accion): Decision {
@@ -80,9 +80,8 @@ export function decidirProponerTrato(estado: Estado, accion: Accion): Decision {
     }
   }
 
-  if (!tieneRecursos(proponente.recursos, entrega)) {
-    return { ok: false, motivo: 'RECURSOS_INSUFICIENTES' };
-  }
+  const faltaEntrega = sinRecursos(proponente, entrega);
+  if (faltaEntrega) return faltaEntrega;
 
   const id = `trato:${accion.jugador}:${estado.tratos.length + 1}:${estado.version}`;
   const trato: Trato = {
@@ -127,13 +126,11 @@ export function decidirAceptarTrato(estado: Estado, accion: Accion): Decision {
     return { ok: false, motivo: 'JUGADOR_DESCONOCIDO' };
   }
 
-  if (!tieneRecursos(aceptante.recursos, trato.pide)) {
-    return { ok: false, motivo: 'RECURSOS_INSUFICIENTES' };
-  }
+  const faltaAceptante = sinRecursos(aceptante, trato.pide);
+  if (faltaAceptante) return faltaAceptante;
 
-  if (!tieneRecursos(proponente.recursos, trato.entrega)) {
-    return { ok: false, motivo: 'RECURSOS_INSUFICIENTES' };
-  }
+  const faltaProponente = sinRecursos(proponente, trato.entrega);
+  if (faltaProponente) return faltaProponente;
 
   return {
     ok: true,
@@ -254,9 +251,8 @@ export function decidirContraofertarTrato(estado: Estado, accion: Accion): Decis
     }
   }
 
-  if (!tieneRecursos(proponente.recursos, entrega)) {
-    return { ok: false, motivo: 'RECURSOS_INSUFICIENTES' };
-  }
+  const faltaEntrega = sinRecursos(proponente, entrega);
+  if (faltaEntrega) return faltaEntrega;
 
   const id = `trato:${accion.jugador}:${estado.tratos.length + 1}:${estado.version}`;
   const trato: Trato = {

@@ -163,7 +163,11 @@ describe('preparación: rechazos', () => {
 
   it('camino lejos del poblado → CAMINO_NO_ADYACENTE', () => {
     const accion: Accion = { tipo: 'COLOCAR_CAMINO_INICIAL', jugador, arista: lejana };
-    expect(decidir(mesa, enCamino, accion)).toEqual({ ok: false, motivo: 'CAMINO_NO_ADYACENTE' });
+    expect(decidir(mesa, enCamino, accion)).toEqual({
+      ok: false,
+      motivo: 'CAMINO_NO_ADYACENTE',
+      detalle: { pobladoPendiente: enCamino.pobladoPendiente },
+    });
   });
 
   it('camino pegado al poblado de una colocación anterior (no el pendiente) → CAMINO_NO_ADYACENTE', () => {
@@ -176,14 +180,22 @@ describe('preparación: rechazos', () => {
     const arista = aristaLibreDe(enSegundo, anterior);
     expect(mesa.arista(arista)!.vertices).not.toContain(nuevo);
     const accion: Accion = { tipo: 'COLOCAR_CAMINO_INICIAL', jugador: yo, arista };
-    expect(decidir(mesa, enSegundo, accion)).toEqual({ ok: false, motivo: 'CAMINO_NO_ADYACENTE' });
+    expect(decidir(mesa, enSegundo, accion)).toEqual({
+      ok: false,
+      motivo: 'CAMINO_NO_ADYACENTE',
+      detalle: { pobladoPendiente: nuevo },
+    });
   });
 
   it('arista con camino → ARISTA_OCUPADA', () => {
     const arista = aristaLibreDe(enCamino, pendiente);
     const ocupada = conCambios(enCamino, { caminos: { [arista]: 'b' } });
     const accion: Accion = { tipo: 'COLOCAR_CAMINO_INICIAL', jugador, arista };
-    expect(decidir(mesa, ocupada, accion)).toEqual({ ok: false, motivo: 'ARISTA_OCUPADA' });
+    expect(decidir(mesa, ocupada, accion)).toEqual({
+      ok: false,
+      motivo: 'ARISTA_OCUPADA',
+      detalle: { dueno: 'b' },
+    });
   });
 
   describe('con un poblado ya puesto por otro jugador', () => {

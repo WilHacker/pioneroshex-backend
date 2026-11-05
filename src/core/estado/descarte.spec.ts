@@ -115,6 +115,7 @@ describe('Fase DESCARTE: DESCARTAR_RECURSOS', () => {
     expect(decidir(mesa, estadoDescarte, accion)).toEqual({
       ok: false,
       motivo: 'CANTIDAD_DESCARTE_INCORRECTA',
+      detalle: { requerido: 4, entregado: 3 },
     });
   });
 

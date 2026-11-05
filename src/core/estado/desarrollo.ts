@@ -1,20 +1,14 @@
 import { clave } from '../mapa/coordenadas.js';
 import { crearRng, mezclar } from '../reglas/azar.js';
-import { COSTOS, type Costo } from '../reglas/costos.js';
+import { COSTOS } from '../reglas/costos.js';
 import type { CartaDesarrollo } from '../reglas/mazo.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { puedeColocarCamino } from './conectividad.js';
+import { faltaPara } from './falta.js';
 import { evaluarGranRuta } from './gran-ruta.js';
 import type { Mesa } from './mesa.js';
 import { puntosDe } from './puntos.js';
 import type { Accion, Decision, Estado, Evento, JugadorId, ResultadoRegla } from './tipos.js';
-
-function faltaPara(recursos: Readonly<Record<Recurso, number>>, costo: Costo): Costo | null {
-  const falta = Object.entries(costo)
-    .map(([recurso, n]) => [recurso, n - recursos[recurso as Recurso]] as const)
-    .filter(([, diferencia]) => diferencia > 0);
-  return falta.length > 0 ? Object.fromEntries(falta) : null;
-}
 
 function validarJugable(
   estado: Estado,
@@ -191,10 +185,19 @@ export function decidirJugarAbundancia(_mesa: Mesa, estado: Estado, accion: Acci
     return { ok: false, motivo: 'RECURSO_INVALIDO' };
   }
 
-  if (r1 === r2) {
-    if (estado.banco[r1] < 2) return { ok: false, motivo: 'BANCO_AGOTADO' };
-  } else {
-    if (estado.banco[r1] < 1 || estado.banco[r2] < 1) return { ok: false, motivo: 'BANCO_AGOTADO' };
+  // Lo que se pide de cada recurso: 2 del mismo, o 1 de cada uno.
+  const pedidos: readonly (readonly [Recurso, number])[] =
+    r1 === r2
+      ? [[r1, 2]]
+      : [
+          [r1, 1],
+          [r2, 1],
+        ];
+  for (const [recurso, pedido] of pedidos) {
+    const disponible = estado.banco[recurso];
+    if (disponible < pedido) {
+      return { ok: false, motivo: 'BANCO_AGOTADO', detalle: { recurso, pedido, disponible } };
+    }
   }
 
   return {

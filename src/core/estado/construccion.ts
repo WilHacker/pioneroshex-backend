@@ -1,6 +1,6 @@
 import { COSTOS, type Costo, type LimitesDePiezas, type Pieza } from '../reglas/costos.js';
-import type { Recurso } from '../reglas/recursos.js';
 import { puedeColocarCamino, puedeColocarPoblado } from './conectividad.js';
+import { faltaPara } from './falta.js';
 import { evaluarGranRuta } from './gran-ruta.js';
 import type { Mesa } from './mesa.js';
 import { puntosDe } from './puntos.js';
@@ -31,14 +31,6 @@ const PIEZA_DE: Readonly<
 
 const esConstruccion = (accion: Accion): accion is AccionConstruir =>
   Object.hasOwn(PIEZA_DE, accion.tipo);
-
-/** Lo que falta de cada recurso para pagar el costo, o null si alcanza. */
-function faltaPara(recursos: Readonly<Record<Recurso, number>>, costo: Costo): Costo | null {
-  const falta = Object.entries(costo)
-    .map(([recurso, n]) => [recurso, n - recursos[recurso as Recurso]] as const)
-    .filter(([, diferencia]) => diferencia > 0);
-  return falta.length > 0 ? Object.fromEntries(falta) : null;
-}
 
 function validarPosicion(mesa: Mesa, estado: Estado, accion: AccionConstruir): ResultadoRegla {
   switch (accion.tipo) {

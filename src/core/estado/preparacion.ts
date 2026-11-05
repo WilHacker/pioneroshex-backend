@@ -56,9 +56,16 @@ function colocarCamino(mesa: Mesa, estado: Estado, jugador: string, arista: stri
   }
   const datos = mesa.arista(arista);
   if (!datos) return { ok: false, motivo: 'ARISTA_INEXISTENTE' };
-  if (arista in estado.caminos) return { ok: false, motivo: 'ARISTA_OCUPADA' };
+  const duenoCamino = estado.caminos[arista];
+  if (duenoCamino !== undefined) {
+    return { ok: false, motivo: 'ARISTA_OCUPADA', detalle: { dueno: duenoCamino } };
+  }
   if (!datos.vertices.includes(estado.pobladoPendiente)) {
-    return { ok: false, motivo: 'CAMINO_NO_ADYACENTE' };
+    return {
+      ok: false,
+      motivo: 'CAMINO_NO_ADYACENTE',
+      detalle: { pobladoPendiente: estado.pobladoPendiente },
+    };
   }
   const paso = estado.pasoPreparacion + 1;
   const total = 2 * estado.jugadores.length;

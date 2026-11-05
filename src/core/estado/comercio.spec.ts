@@ -187,6 +187,7 @@ describe('CAMBIAR_CON_BANCA: decidirCambioConBanca', () => {
     expect(decidir(mesa, estado, accion)).toEqual({
       ok: false,
       motivo: 'BANCO_AGOTADO',
+      detalle: { recurso: 'TRIGO', pedido: 1, disponible: 0 },
     });
   });
 });

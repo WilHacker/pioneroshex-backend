@@ -259,6 +259,15 @@ export interface DetalleRechazo {
   readonly verticeCortado?: string;
   /** Jugador que ocupa el vértice, la arista o el edificio que estorba. */
   readonly dueno?: JugadorId;
+  /** Poblado inicial al que debe pegarse el camino (CAMINO_NO_ADYACENTE). */
+  readonly pobladoPendiente?: string;
+  /** Recurso del banco que no alcanza (BANCO_AGOTADO), con lo pedido y lo que queda. */
+  readonly recurso?: Recurso;
+  readonly pedido?: number;
+  readonly disponible?: number;
+  /** Cartas que había que descartar y cuántas se entregaron (CANTIDAD_DESCARTE_INCORRECTA). */
+  readonly requerido?: number;
+  readonly entregado?: number;
 }
 export interface Rechazo {
   readonly ok: false;

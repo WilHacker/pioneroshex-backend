@@ -47,7 +47,11 @@ export function decidirDescarte(_mesa: Mesa, estado: Estado, accion: Accion): De
     }
 
     if (totalDescartado !== pendiente) {
-      return { ok: false, motivo: 'CANTIDAD_DESCARTE_INCORRECTA' };
+      return {
+        ok: false,
+        motivo: 'CANTIDAD_DESCARTE_INCORRECTA',
+        detalle: { requerido: pendiente, entregado: totalDescartado },
+      };
     }
 
     descarteElegido = accion.recursos;

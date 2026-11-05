@@ -36,7 +36,11 @@ export function decidirCambioConBanca(mesa: Mesa, estado: Estado, accion: Accion
   }
 
   if (estado.banco[accion.recibe] < 1) {
-    return { ok: false, motivo: 'BANCO_AGOTADO' };
+    return {
+      ok: false,
+      motivo: 'BANCO_AGOTADO',
+      detalle: { recurso: accion.recibe, pedido: 1, disponible: estado.banco[accion.recibe] },
+    };
   }
 
   return {

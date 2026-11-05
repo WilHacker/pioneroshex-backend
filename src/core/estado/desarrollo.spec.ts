@@ -141,6 +141,23 @@ describe('desarrollo', () => {
       if (!r.ok) return;
       expect(r.eventos[0]?.tipo).toBe('ABUNDANCIA_JUGADA');
     });
+
+    it('rechaza con BANCO_AGOTADO y dice qué recurso falta y cuánto queda', () => {
+      const estado = produce(estadoListo(), (b) => {
+        b.jugadores[0]!.cartasDesarrollo = ['ABUNDANCIA'];
+        b.banco.MINERAL = 1;
+      });
+      const r = decidirJugarAbundancia(mesa, estado, {
+        tipo: 'JUGAR_ABUNDANCIA',
+        jugador: j0,
+        recursos: ['MINERAL', 'MINERAL'],
+      });
+      expect(r).toEqual({
+        ok: false,
+        motivo: 'BANCO_AGOTADO',
+        detalle: { recurso: 'MINERAL', pedido: 2, disponible: 1 },
+      });
+    });
   });
 
   describe('jugar monopolio', () => {
