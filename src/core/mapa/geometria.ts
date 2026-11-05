@@ -10,13 +10,15 @@ const RAIZ_DE_3 = Math.sqrt(3);
 /** Casillas por vértice: el id de un vértice es el trío de claves de las casillas que lo comparten. */
 const CASILLAS_POR_VERTICE = 3;
 
+/** Dos enteros decimales separados por coma, sin espacios ni notación científica. */
+const CLAVE_DE_CASILLA = /^-?\d+,-?\d+$/;
+
 /** Inversa de `clave` (`"q,r"`). Lanza si el texto no es una clave de casilla. */
 export function hexDeClave(texto: string): Hex {
-  const partes = texto.split(',');
-  const [q, r] = partes.map(Number);
-  if (partes.length !== 2 || !Number.isInteger(q) || !Number.isInteger(r)) {
+  if (!CLAVE_DE_CASILLA.test(texto)) {
     throw new Error(`La clave de casilla no es válida: "${texto}"`);
   }
+  const [q, r] = texto.split(',').map(Number);
   return hex(q!, r!);
 }
 

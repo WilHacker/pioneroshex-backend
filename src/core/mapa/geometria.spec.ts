@@ -15,9 +15,12 @@ describe('hexDeClave', () => {
     );
   });
 
-  it.each(['', 'a,b', '1', '1,2,3', '1.5,2', 'NaN,0'])('rechaza la clave inválida %j', (texto) => {
-    expect(() => hexDeClave(texto)).toThrow(/clave/);
-  });
+  it.each(['', 'a,b', '1', '1,2,3', '1.5,2', 'NaN,0', ',', '1,', ' 1,2', '1, 2', '1e0,2', '0x1,2'])(
+    'rechaza la clave inválida %j',
+    (texto) => {
+      expect(() => hexDeClave(texto)).toThrow(/clave/);
+    },
+  );
 });
 
 describe('centroDeCasilla (pointy-top, lado 1, y crece hacia abajo)', () => {
