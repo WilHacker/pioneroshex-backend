@@ -101,6 +101,17 @@ export type Accion =
   | { tipo: 'JUGAR_MONOPOLIO'; jugador: JugadorId; recurso: Recurso }
   | { tipo: 'TERMINAR_TURNO'; jugador: JugadorId };
 export type Origen = 'PREPARACION' | 'CONSTRUCCION';
+/** Quién provocó la acción: el jugador (VOLUNTARIA) o el reloj de inactividad (INACTIVIDAD). */
+export type CausaAccion = 'VOLUNTARIA' | 'INACTIVIDAD';
+/** Puntos de victoria por categoría (no cantidades). `total` es la suma de todas. */
+export interface DesglosePuntos {
+  readonly poblados: number;
+  readonly ciudades: number;
+  readonly granEjercito: number;
+  readonly granRuta: number;
+  readonly cartasPuntoVictoria: number;
+  readonly total: number;
+}
 export interface FuenteProduccion {
   readonly casilla: string;
   readonly vertice: string;
@@ -118,10 +129,20 @@ export type Evento =
   | { tipo: 'POBLADO_COLOCADO'; jugador: JugadorId; vertice: string; origen: Origen; costo: Costo }
   | { tipo: 'CAMINO_COLOCADO'; jugador: JugadorId; arista: string; origen: Origen; costo: Costo }
   | { tipo: 'CIUDAD_COLOCADA'; jugador: JugadorId; vertice: string; costo: Costo }
-  | { tipo: 'DADOS_TIRADOS'; jugador: JugadorId; dados: readonly [number, number] }
+  | {
+      tipo: 'DADOS_TIRADOS';
+      jugador: JugadorId;
+      dados: readonly [number, number];
+      causa: CausaAccion;
+    }
   | { tipo: 'DESCARTE_REQUERIDO'; jugador: JugadorId; cantidad: number }
-  | { tipo: 'RECURSOS_DESCARTADOS'; jugador: JugadorId; recursos: Partial<Record<Recurso, number>> }
-  | { tipo: 'LADRON_MOVIDO'; jugador: JugadorId; destino: Hex }
+  | {
+      tipo: 'RECURSOS_DESCARTADOS';
+      jugador: JugadorId;
+      recursos: Partial<Record<Recurso, number>>;
+      causa: CausaAccion;
+    }
+  | { tipo: 'LADRON_MOVIDO'; jugador: JugadorId; destino: Hex; causa: CausaAccion }
   | { tipo: 'CARTA_ROBADA'; ladron: JugadorId; victima: JugadorId; recurso: Recurso | null }
   | {
       tipo: 'RECURSOS_REPARTIDOS';
@@ -165,6 +186,7 @@ export type Evento =
       tipo: 'CONSTRUCCION_ESPECIAL_PASADA';
       jugador: JugadorId;
       siguienteConstructor: number | null;
+      causa: CausaAccion;
     }
   | {
       tipo: 'CARTA_DESARROLLO_COMPRADA';
@@ -208,8 +230,14 @@ export type Evento =
       longitud: number;
     }
   | { tipo: 'FASE_CAMBIADA'; fase: Fase; turnoDe: number; pasoPreparacion: number }
-  | { tipo: 'TURNO_TERMINADO'; jugador: JugadorId; siguiente: number }
-  | { tipo: 'PARTIDA_GANADA'; jugador: JugadorId; puntos: number };
+  | { tipo: 'TURNO_TERMINADO'; jugador: JugadorId; siguiente: number; causa: CausaAccion }
+  | {
+      tipo: 'PARTIDA_GANADA';
+      jugador: JugadorId;
+      puntos: number;
+      /** Lo rellena `aplicar` con el estado final; `decidir` solo trae el total. */
+      desglose?: DesglosePuntos;
+    };
 export type MotivoAccion =
   | 'PARTIDA_TERMINADA'
   | 'JUGADOR_DESCONOCIDO'

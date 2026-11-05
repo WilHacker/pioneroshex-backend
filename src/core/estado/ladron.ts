@@ -2,10 +2,15 @@ import { clave } from '../mapa/coordenadas.js';
 import { crearRng, mezclar } from '../reglas/azar.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import type { Mesa } from './mesa.js';
-import type { Accion, Decision, Estado, Evento, JugadorId } from './tipos.js';
+import type { Accion, CausaAccion, Decision, Estado, Evento, JugadorId } from './tipos.js';
 import { decidirFinDeTurno, decidirPasarConstruccionEspecial, decidirTirada } from './turno.js';
 
-export function decidirLadrón(mesa: Mesa, estado: Estado, accion: Accion): Decision {
+export function decidirLadrón(
+  mesa: Mesa,
+  estado: Estado,
+  accion: Accion,
+  causa: CausaAccion = 'VOLUNTARIA',
+): Decision {
   if (accion.tipo !== 'MOVER_LADRON') return { ok: false, motivo: 'FASE_INCORRECTA' };
   if (estado.fase !== 'MOVER_LADRON') return { ok: false, motivo: 'FASE_INCORRECTA' };
 
@@ -51,6 +56,7 @@ export function decidirLadrón(mesa: Mesa, estado: Estado, accion: Accion): Deci
       tipo: 'LADRON_MOVIDO',
       jugador: accion.jugador,
       destino: accion.destino,
+      causa,
     },
   ];
 
@@ -108,7 +114,12 @@ export function decidirSaltoInactividad(mesa: Mesa, estado: Estado, accion: Acci
   }
 
   if (estado.fase === 'PRE_TIRADA') {
-    return decidirTirada(mesa, estado, { tipo: 'TIRAR_DADOS', jugador: accion.jugador });
+    return decidirTirada(
+      mesa,
+      estado,
+      { tipo: 'TIRAR_DADOS', jugador: accion.jugador },
+      'INACTIVIDAD',
+    );
   }
 
   if (estado.fase === 'MOVER_LADRON') {
@@ -116,23 +127,30 @@ export function decidirSaltoInactividad(mesa: Mesa, estado: Estado, accion: Acci
     const actual = estado.ladron ? clave(estado.ladron) : null;
     const destinoHex =
       mesa.mapa.casillas.find((c) => clave(c) !== actual) ?? mesa.mapa.casillas[0]!;
-    return decidirLadrón(mesa, estado, {
-      tipo: 'MOVER_LADRON',
-      jugador: accion.jugador,
-      destino: destinoHex,
-      victima: null,
-    });
+    return decidirLadrón(
+      mesa,
+      estado,
+      { tipo: 'MOVER_LADRON', jugador: accion.jugador, destino: destinoHex, victima: null },
+      'INACTIVIDAD',
+    );
   }
 
   if (estado.fase === 'FASE_PRINCIPAL') {
-    return decidirFinDeTurno(mesa, estado, { tipo: 'TERMINAR_TURNO', jugador: accion.jugador });
+    return decidirFinDeTurno(
+      mesa,
+      estado,
+      { tipo: 'TERMINAR_TURNO', jugador: accion.jugador },
+      'INACTIVIDAD',
+    );
   }
 
   if (estado.fase === 'CONSTRUCCION_ESPECIAL') {
-    return decidirPasarConstruccionEspecial(mesa, estado, {
-      tipo: 'PASAR_CONSTRUCCION_ESPECIAL',
-      jugador: accion.jugador,
-    });
+    return decidirPasarConstruccionEspecial(
+      mesa,
+      estado,
+      { tipo: 'PASAR_CONSTRUCCION_ESPECIAL', jugador: accion.jugador },
+      'INACTIVIDAD',
+    );
   }
 
   return { ok: false, motivo: 'FASE_INCORRECTA' };

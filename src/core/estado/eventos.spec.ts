@@ -7,11 +7,13 @@ describe('eventosPara: filtrado de eventos privados por observador', () => {
     {
       tipo: 'DADOS_TIRADOS',
       jugador: 'j0',
+      causa: 'VOLUNTARIA',
       dados: [3, 4],
     },
     {
       tipo: 'LADRON_MOVIDO',
       jugador: 'j0',
+      causa: 'VOLUNTARIA',
       destino: { q: 1, r: -1, s: 0 },
     },
     {

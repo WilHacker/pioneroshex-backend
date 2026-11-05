@@ -146,6 +146,7 @@ describe('Fase DESCARTE: DESCARTAR_RECURSOS', () => {
       {
         tipo: 'RECURSOS_DESCARTADOS',
         jugador: j1,
+        causa: 'VOLUNTARIA',
         recursos: { MADERA: 2, OVEJA: 2 },
       },
     ]);
@@ -173,6 +174,7 @@ describe('Fase DESCARTE: DESCARTAR_RECURSOS', () => {
       {
         tipo: 'RECURSOS_DESCARTADOS',
         jugador: j1,
+        causa: 'VOLUNTARIA',
         recursos: { MADERA: 4 },
       },
       {
@@ -227,6 +229,7 @@ describe('Fase DESCARTE: evolucionar', () => {
     const siguiente = evolucionar(estado, {
       tipo: 'RECURSOS_DESCARTADOS',
       jugador: j1,
+      causa: 'VOLUNTARIA',
       recursos: { MADERA: 3, OVEJA: 1 },
     });
 

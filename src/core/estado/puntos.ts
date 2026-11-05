@@ -1,4 +1,4 @@
-import type { Estado, JugadorId, TipoEdificio } from './tipos.js';
+import type { DesglosePuntos, Estado, JugadorId, TipoEdificio } from './tipos.js';
 
 const PUNTOS_POR_EDIFICIO: Readonly<Record<TipoEdificio, number>> = { POBLADO: 1, CIUDAD: 2 };
 
@@ -19,6 +19,26 @@ export function puntosOcultosDe(estado: Estado, jugador: JugadorId): number {
   const pvDesarrollo = j.cartasDesarrollo.filter((c) => c === 'PUNTO_VICTORIA').length;
   const pvCompradas = j.cartasCompradasEsteTurno.filter((c) => c === 'PUNTO_VICTORIA').length;
   return pvDesarrollo + pvCompradas;
+}
+
+/** Puntos por categoría con los ocultos incluidos (para mostrarlos al terminar la partida). */
+export function desglosePuntos(estado: Estado, jugador: JugadorId): DesglosePuntos {
+  const delTipo = (tipo: TipoEdificio): number =>
+    Object.values(estado.edificios).filter((e) => e.dueno === jugador && e.tipo === tipo).length *
+    PUNTOS_POR_EDIFICIO[tipo];
+  const poblados = delTipo('POBLADO');
+  const ciudades = delTipo('CIUDAD');
+  const granEjercito = estado.granEjercito === jugador ? 2 : 0;
+  const granRuta = estado.granRuta === jugador ? 2 : 0;
+  const cartasPuntoVictoria = puntosOcultosDe(estado, jugador);
+  return {
+    poblados,
+    ciudades,
+    granEjercito,
+    granRuta,
+    cartasPuntoVictoria,
+    total: poblados + ciudades + granEjercito + granRuta + cartasPuntoVictoria,
+  };
 }
 
 /** Puntos de victoria de un jugador (por defecto incluye solo públicos; opcionalmente ocultos). */

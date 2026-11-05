@@ -29,7 +29,7 @@ describe('TIRAR_DADOS', () => {
     // Con un 7 no hay producción y `medio` quedaría vacío: la primera tirada de la semilla 'PRUEBA'
     // (la de `mesaDePrueba`) no es 7. Si cambia la semilla o el azar, este aviso falla primero.
     expect(dados[0] + dados[1], 'la tirada de la semilla de prueba no debe ser 7').not.toBe(7);
-    expect(r.eventos[0]).toEqual({ tipo: 'DADOS_TIRADOS', jugador: b, dados });
+    expect(r.eventos[0]).toEqual({ tipo: 'DADOS_TIRADOS', jugador: b, dados, causa: 'VOLUNTARIA' });
     expect(r.eventos.at(-1)).toEqual({
       tipo: 'FASE_CAMBIADA',
       fase: 'FASE_PRINCIPAL',
@@ -137,7 +137,7 @@ describe('TERMINAR_TURNO', () => {
     const conDados = conCambios(principal, { turnoDe, dados: [3, 4] });
     expect(decidir(mesa, conDados, terminar(id))).toEqual({
       ok: true,
-      eventos: [{ tipo: 'TURNO_TERMINADO', jugador: id, siguiente }],
+      eventos: [{ tipo: 'TURNO_TERMINADO', jugador: id, siguiente, causa: 'VOLUNTARIA' }],
     });
     const res = aplicar(mesa, conDados, terminar(id));
     if (!res.ok) throw new Error(res.motivo);

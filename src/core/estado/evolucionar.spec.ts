@@ -108,7 +108,12 @@ describe('evolucionar', () => {
   });
 
   it('DADOS_TIRADOS guarda los dados y cuenta la tirada', () => {
-    const nuevo = evolucionarSinMutar(base, { tipo: 'DADOS_TIRADOS', jugador: j0, dados: [3, 4] });
+    const nuevo = evolucionarSinMutar(base, {
+      tipo: 'DADOS_TIRADOS',
+      jugador: j0,
+      dados: [3, 4],
+      causa: 'VOLUNTARIA',
+    });
     expect(nuevo.dados).toEqual([3, 4]);
     expect(nuevo.tiradas).toBe(base.tiradas + 1);
   });
@@ -152,6 +157,7 @@ describe('evolucionar', () => {
     const nuevo = evolucionarSinMutar(estado, {
       tipo: 'TURNO_TERMINADO',
       jugador: j0,
+      causa: 'VOLUNTARIA',
       siguiente: 1,
     });
     expect(nuevo).toMatchObject({ turnoDe: 1, fase: 'PRE_TIRADA', dados: null });
@@ -210,6 +216,7 @@ describe('evolucionar', () => {
       const estadoPasado = evolucionarSinMutar(estadoEsp, {
         tipo: 'CONSTRUCCION_ESPECIAL_PASADA',
         jugador: j1,
+        causa: 'VOLUNTARIA',
         siguienteConstructor: 2,
       });
       expect(estadoPasado.turnoEspecialDe).toBe(2);
@@ -234,6 +241,7 @@ describe('evolucionar', () => {
       const finTurno = evolucionarSinMutar(comp, {
         tipo: 'TURNO_TERMINADO',
         jugador: j0,
+        causa: 'VOLUNTARIA',
         siguiente: 1,
       });
       expect(yo(finTurno).cartasCompradasEsteTurno).toEqual([]);
@@ -324,12 +332,22 @@ describe('evolucionar', () => {
 
   it('un jugador inexistente lanza un error claro', () => {
     expect(() =>
-      evolucionar(base, { tipo: 'DADOS_TIRADOS', jugador: 'nadie', dados: [1, 1] }),
+      evolucionar(base, {
+        tipo: 'DADOS_TIRADOS',
+        jugador: 'nadie',
+        dados: [1, 1],
+        causa: 'VOLUNTARIA',
+      }),
     ).toThrow('Jugador inexistente: nadie');
   });
 
   it('el estado resultante es serializable a JSON y está congelado', () => {
-    const nuevo = evolucionar(base, { tipo: 'DADOS_TIRADOS', jugador: j0, dados: [2, 5] });
+    const nuevo = evolucionar(base, {
+      tipo: 'DADOS_TIRADOS',
+      jugador: j0,
+      dados: [2, 5],
+      causa: 'VOLUNTARIA',
+    });
     expect(JSON.parse(JSON.stringify(nuevo))).toEqual(nuevo);
     expect(Object.isFrozen(nuevo)).toBe(true);
     expect(Object.isFrozen(nuevo.dados)).toBe(true);

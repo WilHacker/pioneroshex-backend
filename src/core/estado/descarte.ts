@@ -82,6 +82,7 @@ export function decidirDescarte(_mesa: Mesa, estado: Estado, accion: Accion): De
       tipo: 'RECURSOS_DESCARTADOS',
       jugador: accion.jugador,
       recursos: descarteElegido,
+      causa: accion.tipo === 'DESCARTE_AUTOMATICO' ? 'INACTIVIDAD' : 'VOLUNTARIA',
     },
   ];
 

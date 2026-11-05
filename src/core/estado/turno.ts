@@ -2,10 +2,15 @@ import { RECURSOS } from '../reglas/recursos.js';
 import { tirarDados } from './dados.js';
 import type { Mesa } from './mesa.js';
 import { repartirProduccion } from './produccion.js';
-import type { Accion, Decision, Estado, Evento } from './tipos.js';
+import type { Accion, CausaAccion, Decision, Estado, Evento } from './tipos.js';
 
 /** Tira los dados (solo en PRE_TIRADA), reparte producción o inicia robo con 7. */
-export function decidirTirada(mesa: Mesa, estado: Estado, accion: Accion): Decision {
+export function decidirTirada(
+  mesa: Mesa,
+  estado: Estado,
+  accion: Accion,
+  causa: CausaAccion = 'VOLUNTARIA',
+): Decision {
   if (accion.tipo !== 'TIRAR_DADOS' || estado.fase !== 'PRE_TIRADA') {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
   }
@@ -28,7 +33,7 @@ export function decidirTirada(mesa: Mesa, estado: Estado, accion: Accion): Decis
     return {
       ok: true,
       eventos: [
-        { tipo: 'DADOS_TIRADOS', jugador: accion.jugador, dados },
+        { tipo: 'DADOS_TIRADOS', jugador: accion.jugador, dados, causa },
         ...eventosDescarte,
         {
           tipo: 'FASE_CAMBIADA',
@@ -43,7 +48,7 @@ export function decidirTirada(mesa: Mesa, estado: Estado, accion: Accion): Decis
   return {
     ok: true,
     eventos: [
-      { tipo: 'DADOS_TIRADOS', jugador: accion.jugador, dados },
+      { tipo: 'DADOS_TIRADOS', jugador: accion.jugador, dados, causa },
       ...repartirProduccion(mesa, estado, suma),
       {
         tipo: 'FASE_CAMBIADA',
@@ -56,7 +61,12 @@ export function decidirTirada(mesa: Mesa, estado: Estado, accion: Accion): Decis
 }
 
 /** Termina el turno (solo en FASE_PRINCIPAL) y cede el turno al siguiente jugador (o inicia fase especial en modo B). */
-export function decidirFinDeTurno(_mesa: Mesa, estado: Estado, accion: Accion): Decision {
+export function decidirFinDeTurno(
+  _mesa: Mesa,
+  estado: Estado,
+  accion: Accion,
+  causa: CausaAccion = 'VOLUNTARIA',
+): Decision {
   if (accion.tipo !== 'TERMINAR_TURNO' || estado.fase !== 'FASE_PRINCIPAL') {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
   }
@@ -82,7 +92,10 @@ export function decidirFinDeTurno(_mesa: Mesa, estado: Estado, accion: Accion): 
   }
 
   const siguiente = (estado.turnoDe + 1) % estado.jugadores.length;
-  return { ok: true, eventos: [{ tipo: 'TURNO_TERMINADO', jugador: accion.jugador, siguiente }] };
+  return {
+    ok: true,
+    eventos: [{ tipo: 'TURNO_TERMINADO', jugador: accion.jugador, siguiente, causa }],
+  };
 }
 
 /** Cede el turno especial de construcción al siguiente rival (o cierra la fase si terminó la ronda). */
@@ -90,6 +103,7 @@ export function decidirPasarConstruccionEspecial(
   _mesa: Mesa,
   estado: Estado,
   accion: Accion,
+  causa: CausaAccion = 'VOLUNTARIA',
 ): Decision {
   if (accion.tipo !== 'PASAR_CONSTRUCCION_ESPECIAL' || estado.fase !== 'CONSTRUCCION_ESPECIAL') {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
@@ -112,11 +126,13 @@ export function decidirPasarConstruccionEspecial(
           tipo: 'CONSTRUCCION_ESPECIAL_PASADA',
           jugador: accion.jugador,
           siguienteConstructor: null,
+          causa,
         },
         {
           tipo: 'TURNO_TERMINADO',
           jugador: estado.jugadores[estado.turnoDe]!.id,
           siguiente: siguienteNormal,
+          causa,
         },
       ],
     };
@@ -129,6 +145,7 @@ export function decidirPasarConstruccionEspecial(
         tipo: 'CONSTRUCCION_ESPECIAL_PASADA',
         jugador: accion.jugador,
         siguienteConstructor: siguiente,
+        causa,
       },
     ],
   };

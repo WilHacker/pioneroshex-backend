@@ -141,6 +141,7 @@ describe('MOVER_LADRON: decidirLadrón', () => {
       {
         tipo: 'LADRON_MOVIDO',
         jugador: j0,
+        causa: 'VOLUNTARIA',
         destino: casillaSinEdificios,
       },
       {
@@ -167,6 +168,7 @@ describe('MOVER_LADRON: decidirLadrón', () => {
     expect(res.eventos[0]).toEqual({
       tipo: 'LADRON_MOVIDO',
       jugador: j0,
+      causa: 'VOLUNTARIA',
       destino: casillaDestino,
     });
     expect(res.eventos[1]).toEqual({
@@ -192,6 +194,7 @@ describe('MOVER_LADRON: evolucionar y aplicar', () => {
     const e1 = evolucionar(estado, {
       tipo: 'LADRON_MOVIDO',
       jugador: j0,
+      causa: 'VOLUNTARIA',
       destino: casillaDestino,
     });
     expect(e1.ladron).toEqual(casillaDestino);
