@@ -20,6 +20,32 @@ export const PUERTOS_CLASICOS: readonly TipoPuerto[] = [
   ...RECURSOS,
 ];
 
+const ARISTAS_COSTA_CLASICA = 30;
+const PUERTOS_POR_10_ARISTAS = 3;
+
+/**
+ * Tipos de puerto para una costa de `aristas` aristas: 3 puertos por cada 10 aristas, con el
+ * mismo número de puertos de cada recurso (1 en el clásico, más en costas largas) y el resto
+ * genéricos. Con 30 aristas da el reparto clásico. Una costa que no aguanta ni un juego completo
+ * (un puerto por recurso, 2 aristas cada uno) no lleva puertos.
+ */
+export function tiposDePuertosParaCosta(aristas: number): readonly TipoPuerto[] {
+  if (!Number.isInteger(aristas) || aristas < 0) {
+    throw new Error(`La costa debe tener un número entero de aristas, no ${aristas}`);
+  }
+  if (Math.floor(aristas / 2) < RECURSOS.length) return [];
+  const porRecurso = Math.max(1, Math.round(aristas / ARISTAS_COSTA_CLASICA));
+  const total = Math.max(
+    RECURSOS.length * porRecurso,
+    Math.round((aristas * PUERTOS_POR_10_ARISTAS) / 10),
+  );
+  const genericos = Array.from({ length: total - RECURSOS.length * porRecurso }, () => 'GENERICO');
+  return [
+    ...genericos,
+    ...Array.from({ length: porRecurso }, () => RECURSOS).flat(),
+  ] as TipoPuerto[];
+}
+
 const RAZON_SIN_PUERTO = 4;
 const RAZON_GENERICA = 3;
 const RAZON_ESPECIFICA = 2;
@@ -33,9 +59,10 @@ const RAZON_ESPECIFICA = 2;
 export function generarPuertos(
   mapa: Mapa,
   semilla: string,
-  tipos: readonly TipoPuerto[] = PUERTOS_CLASICOS,
+  tiposPropios?: readonly TipoPuerto[],
 ): readonly Puerto[] {
   const costa = aristasCosteras(mapa);
+  const tipos = tiposPropios ?? tiposDePuertosParaCosta(costa.length);
   if (tipos.length * 2 > costa.length) {
     throw new Error(
       `No caben ${tipos.length} puertos en una costa de ${costa.length} aristas (hacen falta 2 por puerto)`,

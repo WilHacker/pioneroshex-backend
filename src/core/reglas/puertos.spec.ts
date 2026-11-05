@@ -3,6 +3,7 @@ import { aristasCosteras, crearMapa } from '../mapa/mapa.js';
 import {
   PUERTOS_CLASICOS,
   generarPuertos,
+  tiposDePuertosParaCosta,
   mejorRazon,
   type Puerto,
   type TipoPuerto,
@@ -86,7 +87,7 @@ describe('generarPuertos (semilla y opciones)', () => {
   });
 
   it('rechaza más puertos de los que caben (hace falta al menos 2 aristas por puerto)', () => {
-    expect(() => generarPuertos(crearMapa(0), 's')).toThrow(/puertos/i);
+    expect(() => generarPuertos(crearMapa(0), 's', PUERTOS_CLASICOS)).toThrow(/puertos/i);
   });
 
   it('propiedad: en cualquier mapa donde caben, los puertos van en la costa y sin vértices compartidos', () => {
@@ -96,7 +97,7 @@ describe('generarPuertos (semilla y opciones)', () => {
         const idsCosta = new Set(aristasCosteras(m).map((a) => a.id));
         const puertos = generarPuertos(m, semilla);
         return (
-          puertos.length === 9 &&
+          puertos.length === tiposDePuertosParaCosta(idsCosta.size).length &&
           puertos.every((p) => idsCosta.has(p.arista)) &&
           !comparteVertices(puertos)
         );
