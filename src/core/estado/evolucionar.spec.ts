@@ -119,6 +119,8 @@ describe('evolucionar', () => {
       jugador: j0,
       recurso: 'OVEJA',
       cantidad: 2,
+      pedido: 2,
+      recortado: 0,
       causa: { tipo: 'PREPARACION', vertice, casilla: '0,0,0' },
     });
     expect(yo(nuevo).recursos.OVEJA).toBe(7);

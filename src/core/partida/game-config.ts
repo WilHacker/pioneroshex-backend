@@ -23,7 +23,10 @@ const VERTICES_BLOQUEADOS = 4;
 
 /** Lo que el anfitrión fija al crear la sala; gobierna las reglas de la partida. */
 export interface GameConfig {
-  readonly semilla: string;
+  /** Semilla pública y compartible para generar el tablero y los puertos. */
+  readonly semillaMapa: string;
+  /** Semilla privada del servidor para orden de turno, dados y mazo (auditable al finalizar). */
+  readonly semillaAzar: string;
   readonly jugadores: number;
   /** Radio del mapa hexagonal (R=2 → 19 casillas). */
   readonly radio: number;
@@ -34,8 +37,12 @@ export interface GameConfig {
   readonly puntosVictoria: number;
 }
 
-/** Solo la semilla es obligatoria: `core/` no puede inventar azar (nada de `Math.random`). */
-export type GameConfigEntrada = Pick<GameConfig, 'semilla'> & Partial<Omit<GameConfig, 'semilla'>>;
+/** Configuración de entrada: admite semillaMapa y semillaAzar por separado, o semilla como atajo para ambas. */
+export type GameConfigEntrada = {
+  readonly semillaMapa?: string;
+  readonly semillaAzar?: string;
+  readonly semilla?: string;
+} & Partial<Omit<GameConfig, 'semillaMapa' | 'semillaAzar'>>;
 
 const esEnteroEnRango = (valor: number, min: number, max: number): boolean =>
   Number.isInteger(valor) && valor >= min && valor <= max;
@@ -47,12 +54,15 @@ const verticesDelMapa = (radio: number): number => 6 * (radio + 1) ** 2;
  * y valida el resultado. Devuelve un objeto nuevo y congelado.
  */
 export function crearGameConfig(entrada: GameConfigEntrada): GameConfig {
+  const semillaMapa = entrada.semillaMapa ?? entrada.semilla;
+  const semillaAzar = entrada.semillaAzar ?? entrada.semilla ?? semillaMapa;
   const jugadores = entrada.jugadores ?? JUGADORES_MAPA_CLASICO;
   const turnRuleMode = entrada.turnRuleMode ?? 'A';
   const esMapaGrande = jugadores > JUGADORES_MAPA_CLASICO;
 
   const config: GameConfig = {
-    semilla: entrada.semilla,
+    semillaMapa: semillaMapa ?? '',
+    semillaAzar: semillaAzar ?? '',
     jugadores,
     turnRuleMode,
     radio: entrada.radio ?? (esMapaGrande ? RADIO_GRANDE : RADIO_CLASICO),
@@ -67,8 +77,11 @@ export function crearGameConfig(entrada: GameConfigEntrada): GameConfig {
 }
 
 function validar(config: GameConfig): void {
-  if (config.semilla.trim() === '') {
-    throw new Error('La semilla no puede estar vacía');
+  if (config.semillaMapa.trim() === '') {
+    throw new Error('La semilla del mapa no puede estar vacía');
+  }
+  if (config.semillaAzar.trim() === '') {
+    throw new Error('La semilla del azar no puede estar vacía');
   }
   if (!esEnteroEnRango(config.jugadores, JUGADORES_MIN, JUGADORES_MAX)) {
     throw new Error(

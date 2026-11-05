@@ -1,4 +1,7 @@
+import { decidirCambioConBanca } from './comercio.js';
 import { decidirConstruccion } from './construccion.js';
+import { decidirDescarte } from './descarte.js';
+import { decidirLadrón, decidirSaltoInactividad } from './ladron.js';
 import type { Mesa } from './mesa.js';
 import { decidirPreparacion } from './preparacion.js';
 import { decidirFinDeTurno, decidirTirada } from './turno.js';
@@ -11,9 +14,14 @@ export const manejadores: Readonly<Record<Accion['tipo'], Manejador>> = {
   COLOCAR_POBLADO_INICIAL: decidirPreparacion,
   COLOCAR_CAMINO_INICIAL: decidirPreparacion,
   TIRAR_DADOS: decidirTirada,
+  DESCARTAR_RECURSOS: decidirDescarte,
+  DESCARTE_AUTOMATICO: decidirDescarte,
+  MOVER_LADRON: decidirLadrón,
+  SALTAR_TURNO_POR_INACTIVIDAD: decidirSaltoInactividad,
   CONSTRUIR_CAMINO: decidirConstruccion,
   CONSTRUIR_POBLADO: decidirConstruccion,
   CONSTRUIR_CIUDAD: decidirConstruccion,
+  CAMBIAR_CON_BANCA: decidirCambioConBanca,
   TERMINAR_TURNO: decidirFinDeTurno,
 };
 
@@ -22,7 +30,9 @@ export function decidir(mesa: Mesa, estado: Estado, accion: Accion): Decision {
   if (estado.fase === 'FIN') return { ok: false, motivo: 'PARTIDA_TERMINADA' };
   const indice = estado.jugadores.findIndex((j) => j.id === accion.jugador);
   if (indice === -1) return { ok: false, motivo: 'JUGADOR_DESCONOCIDO' };
-  if (indice !== estado.turnoDe) return { ok: false, motivo: 'NO_ES_TU_TURNO' };
+  if (estado.fase !== 'DESCARTE' && indice !== estado.turnoDe) {
+    return { ok: false, motivo: 'NO_ES_TU_TURNO' };
+  }
   // Va tras los chequeos generales: un tipo desconocido es una acción que no toca en ninguna fase.
   // `Object.hasOwn` evita llamar a lo heredado del prototipo ('constructor', 'toString'...).
   if (!Object.hasOwn(manejadores, accion.tipo)) return { ok: false, motivo: 'FASE_INCORRECTA' };

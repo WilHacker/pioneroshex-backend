@@ -15,8 +15,8 @@ export interface VistaJugador {
 }
 
 export interface Vista {
-  /** Sin `semilla`: de ella sale todo el azar, y revelarla permitiría predecir dados y mazo. */
-  readonly config: Omit<GameConfig, 'semilla'>;
+  /** Sin `semillaAzar`: de ella sale el azar secreto (dados, mazo). La `semillaMapa` es pública. */
+  readonly config: Omit<GameConfig, 'semillaAzar'>;
   readonly yo: JugadorId | null;
   readonly jugadores: readonly VistaJugador[];
   readonly fase: Fase;
@@ -27,6 +27,7 @@ export interface Vista {
   readonly banco: Estado['banco'];
   readonly ladron: Hex | null;
   readonly dados: Estado['dados'];
+  readonly descartesPendientes: Estado['descartesPendientes'];
   readonly ganador: JugadorId | null;
   readonly version: number;
 }
@@ -39,7 +40,7 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
   if (jugadorId !== null && !estado.jugadores.some((j) => j.id === jugadorId)) {
     throw new Error(`El jugador "${jugadorId}" no participa en la partida`);
   }
-  const { semilla: _oculta, ...configPublica } = estado.config;
+  const { semillaAzar: _oculta, ...configPublica } = estado.config;
   const jugadores = estado.jugadores.map((j): VistaJugador => ({
     id: j.id,
     piezasRestantes: { ...j.piezasRestantes },
@@ -58,6 +59,7 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
     banco: { ...estado.banco },
     ladron: estado.ladron && { ...estado.ladron },
     dados: estado.dados && [estado.dados[0], estado.dados[1]],
+    descartesPendientes: { ...estado.descartesPendientes },
     ganador: estado.ganador,
     version: estado.version,
   };

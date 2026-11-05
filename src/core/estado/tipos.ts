@@ -5,7 +5,13 @@ import type { Recurso } from '../reglas/recursos.js';
 
 export type JugadorId = string;
 export type Fase =
-  'PREPARACION_POBLADO' | 'PREPARACION_CAMINO' | 'PRE_TIRADA' | 'FASE_PRINCIPAL' | 'FIN';
+  | 'PREPARACION_POBLADO'
+  | 'PREPARACION_CAMINO'
+  | 'PRE_TIRADA'
+  | 'DESCARTE'
+  | 'MOVER_LADRON'
+  | 'FASE_PRINCIPAL'
+  | 'FIN';
 export type TipoEdificio = 'POBLADO' | 'CIUDAD';
 export interface Edificio {
   readonly dueno: JugadorId;
@@ -23,6 +29,7 @@ export interface Estado {
   readonly turnoDe: number; // índice en jugadores
   readonly pasoPreparacion: number; // 0..2n-1 en preparación; 2n después
   readonly pobladoPendiente: string | null; // vértice del poblado inicial sin camino
+  readonly descartesPendientes: Readonly<Record<JugadorId, number>>;
   readonly edificios: Readonly<Record<string, Edificio>>; // por id de vértice
   readonly caminos: Readonly<Record<string, JugadorId>>; // por id de arista
   readonly banco: Readonly<Record<Recurso, number>>;
@@ -36,9 +43,14 @@ export type Accion =
   | { tipo: 'COLOCAR_POBLADO_INICIAL'; jugador: JugadorId; vertice: string }
   | { tipo: 'COLOCAR_CAMINO_INICIAL'; jugador: JugadorId; arista: string }
   | { tipo: 'TIRAR_DADOS'; jugador: JugadorId }
+  | { tipo: 'DESCARTAR_RECURSOS'; jugador: JugadorId; recursos: Partial<Record<Recurso, number>> }
+  | { tipo: 'DESCARTE_AUTOMATICO'; jugador: JugadorId }
+  | { tipo: 'MOVER_LADRON'; jugador: JugadorId; destino: Hex; victima: JugadorId | null }
+  | { tipo: 'SALTAR_TURNO_POR_INACTIVIDAD'; jugador: JugadorId }
   | { tipo: 'CONSTRUIR_CAMINO'; jugador: JugadorId; arista: string }
   | { tipo: 'CONSTRUIR_POBLADO'; jugador: JugadorId; vertice: string }
   | { tipo: 'CONSTRUIR_CIUDAD'; jugador: JugadorId; vertice: string }
+  | { tipo: 'CAMBIAR_CON_BANCA'; jugador: JugadorId; entrega: Recurso; recibe: Recurso }
   | { tipo: 'TERMINAR_TURNO'; jugador: JugadorId };
 export type Origen = 'PREPARACION' | 'CONSTRUCCION';
 export interface FuenteProduccion {
@@ -59,12 +71,26 @@ export type Evento =
   | { tipo: 'CAMINO_COLOCADO'; jugador: JugadorId; arista: string; origen: Origen; costo: Costo }
   | { tipo: 'CIUDAD_COLOCADA'; jugador: JugadorId; vertice: string; costo: Costo }
   | { tipo: 'DADOS_TIRADOS'; jugador: JugadorId; dados: readonly [number, number] }
+  | { tipo: 'DESCARTE_REQUERIDO'; jugador: JugadorId; cantidad: number }
+  | { tipo: 'RECURSOS_DESCARTADOS'; jugador: JugadorId; recursos: Partial<Record<Recurso, number>> }
+  | { tipo: 'LADRON_MOVIDO'; jugador: JugadorId; destino: Hex }
+  | { tipo: 'CARTA_ROBADA'; ladron: JugadorId; victima: JugadorId; recurso: Recurso | null }
   | {
       tipo: 'RECURSOS_REPARTIDOS';
       jugador: JugadorId;
       recurso: Recurso;
       cantidad: number;
+      pedido: number;
+      recortado: number;
       causa: CausaRecursos;
+    }
+  | {
+      tipo: 'CAMBIO_CON_BANCA_REALIZADO';
+      jugador: JugadorId;
+      entrega: Recurso;
+      cantidadEntregada: number;
+      recibe: Recurso;
+      cantidadRecibida: 1;
     }
   | { tipo: 'PRODUCCION_BLOQUEADA'; recurso: Recurso; pedido: number; disponible: number }
   | { tipo: 'FASE_CAMBIADA'; fase: Fase; turnoDe: number; pasoPreparacion: number }
@@ -77,6 +103,16 @@ export type MotivoAccion =
   | 'FASE_INCORRECTA'
   | 'SIN_PIEZAS'
   | 'RECURSOS_INSUFICIENTES'
+  | 'NO_DEBES_DESCARTAR'
+  | 'CANTIDAD_DESCARTE_INCORRECTA'
+  | 'DESTINO_INVALIDO'
+  | 'MISMO_DESTINO'
+  | 'VICTIMA_INVALIDA'
+  | 'VICTIMA_REQUERIDA'
+  | 'SIN_VICTIMA_POSIBLE'
+  | 'BANCO_AGOTADO'
+  | 'MISMO_RECURSO'
+  | 'RECURSO_INVALIDO'
   | 'VERTICE_INEXISTENTE'
   | 'ARISTA_INEXISTENTE'
   | 'VERTICE_OCUPADO'

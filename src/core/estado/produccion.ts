@@ -78,6 +78,8 @@ export function repartirProduccion(mesa: Mesa, estado: Estado, suma: number): re
         jugador,
         recurso,
         cantidad,
+        pedido: pedido.cantidad,
+        recortado: Math.max(0, pedido.cantidad - cantidad),
         causa: { tipo: 'PRODUCCION', tirada: suma, fuentes: pedido.fuentes },
       });
     }

@@ -69,7 +69,10 @@ export function simularPartida(
   while (estado.fase !== 'FIN') {
     comprobarTopes(estado, enEsteTurno, opciones);
     const tiradasAntes = estado.tiradas;
-    const jugador = estado.jugadores[estado.turnoDe]!.id;
+    const jugador =
+      estado.fase === 'DESCARTE'
+        ? (Object.keys(estado.descartesPendientes)[0] ?? estado.jugadores[estado.turnoDe]!.id)
+        : estado.jugadores[estado.turnoDe]!.id;
     const accion = elegirAccion(enumerarAcciones(mesa, estado, jugador), rng);
     estado = aplicarOLanzar(mesa, estado, accion);
     acciones.push(accion);

@@ -1,10 +1,10 @@
 // Utilidades solo para tests: excluidas de la cobertura y del build.
-import { crearGameConfig, type GameConfig } from '../partida/game-config.js';
+import { crearGameConfig, type GameConfigEntrada } from '../partida/game-config.js';
 import type { CasillaTablero } from '../reglas/tablero.js';
 import { crearMesa, type Mesa } from './mesa.js';
 import type { Estado } from './tipos.js';
 
-export function mesaDePrueba(opciones: Partial<GameConfig> = {}): Mesa {
+export function mesaDePrueba(opciones: Partial<GameConfigEntrada> = {}): Mesa {
   return crearMesa(crearGameConfig({ semilla: 'PRUEBA', jugadores: 4, ...opciones }));
 }
 

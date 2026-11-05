@@ -1,15 +1,25 @@
 import { JUGADORES_MAX, JUGADORES_MIN, crearGameConfig, type GameConfig } from './game-config.js';
 
 describe('crearGameConfig', () => {
-  it('con solo la semilla da la partida clásica: 4 jugadores, radio 2, límite de mano 7', () => {
+  it('con solo la semilla da la partida clásica con ambas semillas iguales', () => {
     expect(crearGameConfig({ semilla: 'ANDES-2026' })).toEqual<GameConfig>({
-      semilla: 'ANDES-2026',
+      semillaMapa: 'ANDES-2026',
+      semillaAzar: 'ANDES-2026',
       jugadores: 4,
       radio: 2,
       turnRuleMode: 'A',
       robberHandLimit: 7,
       puntosVictoria: 10,
     });
+  });
+
+  it('permite separar semillaMapa y semillaAzar', () => {
+    const config = crearGameConfig({
+      semillaMapa: 'MAPA-PUBLICO',
+      semillaAzar: 'AZAR-SECRETO',
+    });
+    expect(config.semillaMapa).toBe('MAPA-PUBLICO');
+    expect(config.semillaAzar).toBe('AZAR-SECRETO');
   });
 
   it('respeta lo que el anfitrión fija', () => {
@@ -22,7 +32,8 @@ describe('crearGameConfig', () => {
       puntosVictoria: 8,
     });
     expect(config).toEqual({
-      semilla: 'X',
+      semillaMapa: 'X',
+      semillaAzar: 'X',
       jugadores: 3,
       radio: 1,
       turnRuleMode: 'B',
@@ -81,6 +92,15 @@ describe('crearGameConfig', () => {
 
     it.each(['', '   '])('rechaza la semilla vacía %j', (semilla) => {
       expect(() => crearGameConfig({ semilla })).toThrow(/semilla/);
+    });
+
+    it('rechaza semillaMapa vacía o semillaAzar vacía', () => {
+      expect(() => crearGameConfig({ semillaMapa: '', semillaAzar: 'AZAR' })).toThrow(
+        /semilla del mapa/,
+      );
+      expect(() => crearGameConfig({ semillaMapa: 'MAPA', semillaAzar: '' })).toThrow(
+        /semilla del azar/,
+      );
     });
 
     it('rechaza un modo de turnos desconocido', () => {

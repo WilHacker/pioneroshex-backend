@@ -27,7 +27,7 @@ function validarIds(mesa: Mesa, ids: readonly JugadorId[]): void {
 export function crearPartida(mesa: Mesa, ids: readonly JugadorId[]): Estado {
   validarIds(mesa, ids);
   const { config } = mesa;
-  const orden = mezclar(ids, crearRng(`${config.semilla}:orden`));
+  const orden = mezclar(ids, crearRng(`${config.semillaAzar}:orden`));
   const jugadores: Jugador[] = orden.map((id) => ({
     id,
     recursos: porRecurso(0),
@@ -44,6 +44,7 @@ export function crearPartida(mesa: Mesa, ids: readonly JugadorId[]): Estado {
     turnoDe: 0,
     pasoPreparacion: 0,
     pobladoPendiente: null,
+    descartesPendientes: {},
     edificios: {},
     caminos: {},
     banco,

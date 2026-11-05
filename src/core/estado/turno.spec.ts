@@ -25,7 +25,7 @@ describe('TIRAR_DADOS', () => {
     const estado = conCambios(preTirada, { turnoDe: 1, edificios: edificiosDe(mesa, b) });
     const r = decidir(mesa, estado, tirar(b));
     if (!r.ok) throw new Error(r.motivo);
-    const dados = tirarDados(estado.config.semilla, estado.tiradas);
+    const dados = tirarDados(estado.config.semillaAzar, estado.tiradas);
     // Con un 7 no hay producción y `medio` quedaría vacío: la primera tirada de la semilla 'PRUEBA'
     // (la de `mesaDePrueba`) no es 7. Si cambia la semilla o el azar, este aviso falla primero.
     expect(dados[0] + dados[1], 'la tirada de la semilla de prueba no debe ser 7').not.toBe(7);
@@ -45,7 +45,7 @@ describe('TIRAR_DADOS', () => {
     const r = aplicar(mesa, preTirada, tirar(a));
     if (!r.ok) throw new Error(r.motivo);
     expect(r.estado.fase).toBe('FASE_PRINCIPAL');
-    expect(r.estado.dados).toEqual(tirarDados(preTirada.config.semilla, 0));
+    expect(r.estado.dados).toEqual(tirarDados(preTirada.config.semillaAzar, 0));
     expect(r.estado.tiradas).toBe(preTirada.tiradas + 1);
   });
 
@@ -74,7 +74,7 @@ describe('TIRAR_DADOS', () => {
         pasoPreparacion: 6,
         edificios: edificiosDe(m, j0),
       });
-      const [x, y] = tirarDados(estado.config.semilla, estado.tiradas);
+      const [x, y] = tirarDados(estado.config.semillaAzar, estado.tiradas);
       const porSuma = repartirProduccion(m, estado, x + y);
       if (x + y === 7 || porSuma.length === 0) continue;
       if (
@@ -106,7 +106,7 @@ describe('TIRAR_DADOS', () => {
       pasoPreparacion: 6,
       edificios: edificiosDe(m, j0),
     });
-    expect(estado.config.semilla).toBe(semillaConSiete);
+    expect(estado.config.semillaAzar).toBe(semillaConSiete);
     const r = decidir(m, estado, tirar(j0));
     if (!r.ok) throw new Error(r.motivo);
     const tirada = r.eventos[0];
@@ -153,11 +153,28 @@ describe('TERMINAR_TURNO', () => {
     });
     for (let i = 0; i < n; i++) {
       const id = estado.jugadores[estado.turnoDe]!.id;
-      for (const accion of [tirar(id), terminar(id)]) {
-        const r = aplicar(m, estado, accion);
-        if (!r.ok) throw new Error(r.motivo);
-        estado = r.estado;
+      const rTirada = aplicar(m, estado, tirar(id));
+      if (!rTirada.ok) throw new Error(rTirada.motivo);
+      estado = rTirada.estado;
+
+      if (estado.fase === 'MOVER_LADRON') {
+        const actual = estado.ladron;
+        const destino = m.tablero.casillas.find(
+          (c) => !actual || c.hex.q !== actual.q || c.hex.r !== actual.r,
+        )!.hex;
+        const rLadron = aplicar(m, estado, {
+          tipo: 'MOVER_LADRON',
+          jugador: id,
+          destino,
+          victima: null,
+        });
+        if (!rLadron.ok) throw new Error(rLadron.motivo);
+        estado = rLadron.estado;
       }
+
+      const rFin = aplicar(m, estado, terminar(id));
+      if (!rFin.ok) throw new Error(rFin.motivo);
+      estado = rFin.estado;
     }
     expect(estado.turnoDe).toBe(0);
     expect(estado.fase).toBe('PRE_TIRADA');

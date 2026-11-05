@@ -1,4 +1,5 @@
 import type { Costo } from '../reglas/costos.js';
+import { RECURSOS } from '../reglas/recursos.js';
 import { decidir } from './decidir.js';
 import type { Mesa } from './mesa.js';
 import type { Accion, Estado, JugadorId, MotivoAccion, Rechazo } from './tipos.js';
@@ -10,7 +11,7 @@ export interface AccionDisponible {
   readonly falta?: Costo;
 }
 
-type Candidatas = (mesa: Mesa, jugador: JugadorId) => Accion[];
+type Candidatas = (mesa: Mesa, jugador: JugadorId, estado?: Estado) => Accion[];
 
 const porVertice =
   (tipo: 'COLOCAR_POBLADO_INICIAL' | 'CONSTRUIR_POBLADO' | 'CONSTRUIR_CIUDAD'): Candidatas =>
@@ -21,14 +22,68 @@ const porArista =
   (mesa, jugador) =>
     mesa.mapa.aristas.map((a) => ({ tipo, jugador, arista: a.id }));
 
+const cambiosConBanca: Candidatas = (_mesa, jugador) =>
+  RECURSOS.flatMap((entrega) =>
+    RECURSOS.filter((recibe) => recibe !== entrega).map((recibe) => ({
+      tipo: 'CAMBIAR_CON_BANCA' as const,
+      jugador,
+      entrega,
+      recibe,
+    })),
+  );
+
+const moverLadron: Candidatas = (mesa, jugador, estado) => {
+  if (!estado) {
+    return mesa.mapa.casillas.map((c): Accion => ({
+      tipo: 'MOVER_LADRON',
+      jugador,
+      destino: c,
+      victima: null,
+    }));
+  }
+  return mesa.mapa.casillas.flatMap((c): Accion[] => {
+    const cClave = `${c.q},${c.r},${c.s}`;
+    const vertices = mesa.mapa.vertices.filter((v) =>
+      v.casillas.some((cas) => `${cas.q},${cas.r},${cas.s}` === cClave),
+    );
+    const rivalesConCartas = Array.from(
+      new Set(
+        vertices
+          .map((v) => estado.edificios[v.id]?.dueno)
+          .filter((id): id is JugadorId => Boolean(id && id !== jugador)),
+      ),
+    ).filter((rId) => {
+      const rJug = estado.jugadores.find((j) => j.id === rId);
+      return rJug && RECURSOS.some((rec) => rJug.recursos[rec] > 0);
+    });
+
+    if (rivalesConCartas.length > 0) {
+      return rivalesConCartas.map((victima): Accion => ({
+        tipo: 'MOVER_LADRON',
+        jugador,
+        destino: c,
+        victima,
+      }));
+    }
+    return [{ tipo: 'MOVER_LADRON', jugador, destino: c, victima: null }];
+  });
+};
+
 /** Candidatas por tipo (cada vértice o arista del mapa); el orden fija el de la respuesta. */
 const CANDIDATAS: Record<Accion['tipo'], Candidatas> = {
   COLOCAR_POBLADO_INICIAL: porVertice('COLOCAR_POBLADO_INICIAL'),
   COLOCAR_CAMINO_INICIAL: porArista('COLOCAR_CAMINO_INICIAL'),
   TIRAR_DADOS: (_mesa, jugador) => [{ tipo: 'TIRAR_DADOS', jugador }],
+  DESCARTAR_RECURSOS: (_mesa, jugador) => [{ tipo: 'DESCARTAR_RECURSOS', jugador, recursos: {} }],
+  DESCARTE_AUTOMATICO: (_mesa, jugador) => [{ tipo: 'DESCARTE_AUTOMATICO', jugador }],
+  MOVER_LADRON: moverLadron,
+  SALTAR_TURNO_POR_INACTIVIDAD: (_mesa, jugador) => [
+    { tipo: 'SALTAR_TURNO_POR_INACTIVIDAD', jugador },
+  ],
   CONSTRUIR_CAMINO: porArista('CONSTRUIR_CAMINO'),
   CONSTRUIR_POBLADO: porVertice('CONSTRUIR_POBLADO'),
   CONSTRUIR_CIUDAD: porVertice('CONSTRUIR_CIUDAD'),
+  CAMBIAR_CON_BANCA: cambiosConBanca,
   TERMINAR_TURNO: (_mesa, jugador) => [{ tipo: 'TERMINAR_TURNO', jugador }],
 };
 const TIPOS = Object.keys(CANDIDATAS) as Accion['tipo'][];
@@ -45,6 +100,16 @@ const ALCANCE: Readonly<Record<MotivoAccion, 'general' | 'lugar'>> = {
   FASE_INCORRECTA: 'general',
   SIN_PIEZAS: 'general',
   RECURSOS_INSUFICIENTES: 'general',
+  NO_DEBES_DESCARTAR: 'general',
+  CANTIDAD_DESCARTE_INCORRECTA: 'general',
+  BANCO_AGOTADO: 'general',
+  MISMO_RECURSO: 'general',
+  RECURSO_INVALIDO: 'general',
+  DESTINO_INVALIDO: 'lugar',
+  MISMO_DESTINO: 'lugar',
+  VICTIMA_INVALIDA: 'lugar',
+  VICTIMA_REQUERIDA: 'lugar',
+  SIN_VICTIMA_POSIBLE: 'lugar',
   VERTICE_INEXISTENTE: 'lugar',
   ARISTA_INEXISTENTE: 'lugar',
   VERTICE_OCUPADO: 'lugar',
@@ -67,7 +132,7 @@ interface Evaluacion {
 function evaluar(mesa: Mesa, estado: Estado, jugador: JugadorId, tipo: Accion['tipo']): Evaluacion {
   const aceptadas: Accion[] = [];
   let primerRechazo: Rechazo | null = null;
-  for (const accion of CANDIDATAS[tipo](mesa, jugador)) {
+  for (const accion of CANDIDATAS[tipo](mesa, jugador, estado)) {
     const decision = decidir(mesa, estado, accion);
     if (decision.ok) aceptadas.push(accion);
     else primerRechazo ??= decision;

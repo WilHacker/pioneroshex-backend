@@ -6,8 +6,9 @@ import { conCambios, mesaDePrueba } from './pruebas.js';
 import type { Estado } from './tipos.js';
 import { vistaPara } from './vista.js';
 
-const SEMILLA = 'SEMILLA-SECRETA-123';
-const mesa = mesaDePrueba({ semilla: SEMILLA });
+const SEMILLA_MAPA = 'MAPA-PUBLICO-123';
+const SEMILLA_AZAR = 'SEMILLA-SECRETA-123';
+const mesa = mesaDePrueba({ semillaMapa: SEMILLA_MAPA, semillaAzar: SEMILLA_AZAR });
 const base = crearPartida(mesa, ['a', 'b', 'c', 'd']);
 const [j0, j1, j2] = base.jugadores.map((j) => j.id) as [string, string, string];
 const [v1, v2, v3] = mesa.mapa.vertices.map((v) => v.id) as [string, string, string];
@@ -66,11 +67,12 @@ describe('vistaPara', () => {
     expect(vista.ganador).toBe(j1);
   });
 
-  it('la config de la vista no expone la semilla (jugador y espectador)', () => {
+  it('la config de la vista no expone la semillaAzar pero sí la semillaMapa', () => {
     for (const observador of [j0, null]) {
       const vista = vistaPara(estado, observador);
-      expect('semilla' in vista.config).toBe(false);
-      expect(JSON.stringify(vista)).not.toContain(SEMILLA);
+      expect('semillaAzar' in vista.config).toBe(false);
+      expect(vista.config.semillaMapa).toBe(SEMILLA_MAPA);
+      expect(JSON.stringify(vista)).not.toContain(SEMILLA_AZAR);
     }
   });
 
@@ -92,6 +94,7 @@ describe('vistaPara', () => {
         'caminos',
         'config',
         'dados',
+        'descartesPendientes',
         'edificios',
         'fase',
         'ganador',
@@ -104,7 +107,14 @@ describe('vistaPara', () => {
     );
     // Lista literal a propósito: un campo nuevo de GameConfig (quizá sensible) hace fallar el test.
     expect(Object.keys(vista.config).toSorted()).toEqual(
-      ['jugadores', 'puntosVictoria', 'radio', 'robberHandLimit', 'turnRuleMode'].toSorted(),
+      [
+        'jugadores',
+        'puntosVictoria',
+        'radio',
+        'robberHandLimit',
+        'semillaMapa',
+        'turnRuleMode',
+      ].toSorted(),
     );
     expect(Object.keys(vista.jugadores[0] ?? {}).toSorted()).toEqual(
       ['id', 'piezasRestantes', 'puntos', 'recursos', 'totalCartas'].toSorted(),
@@ -168,12 +178,14 @@ describe('vistaPara: no filtra manos ajenas (propiedad)', () => {
           });
           expect(vista.jugadores[i]?.recursos).toEqual(manos[i]);
           expect(JSON.stringify(vista).split(claveMano).length - 1).toBe(1);
-          expect(JSON.stringify(vista)).not.toContain(SEMILLA);
+          expect(JSON.stringify(vista)).toContain(SEMILLA_MAPA);
+          expect(JSON.stringify(vista)).not.toContain(SEMILLA_AZAR);
         }
         const espectador = vistaPara(partida, null);
         expect(espectador.jugadores.every((j) => j.recursos === null)).toBe(true);
         expect(JSON.stringify(espectador)).not.toContain(claveMano);
-        expect(JSON.stringify(espectador)).not.toContain(SEMILLA);
+        expect(JSON.stringify(espectador)).toContain(SEMILLA_MAPA);
+        expect(JSON.stringify(espectador)).not.toContain(SEMILLA_AZAR);
         espectador.jugadores.forEach((j, k) => {
           expect(j.totalCartas).toBe(RECURSOS.reduce((s, r) => s + (manos[k]?.[r] ?? 0), 0));
         });

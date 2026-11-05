@@ -51,6 +51,8 @@ describe('repartirProduccion', () => {
         jugador: j0,
         recurso: recurso8,
         cantidad: 1,
+        pedido: 1,
+        recortado: 0,
         causa: {
           tipo: 'PRODUCCION',
           tirada: 8,
@@ -102,7 +104,7 @@ describe('repartirProduccion', () => {
       const estado = conEdificios({ [v1]: edificio(j0, 'CIUDAD') }, { banco: bancoCon(1) });
       const eventos = repartirProduccion(mesa, estado, 8);
       expect(eventos).toHaveLength(1);
-      expect(eventos[0]).toMatchObject({ jugador: j0, cantidad: 1 });
+      expect(eventos[0]).toMatchObject({ jugador: j0, cantidad: 1, pedido: 2, recortado: 1 });
     });
 
     it('con el banco vacío no se emite un reparto de 0', () => {

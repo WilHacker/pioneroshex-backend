@@ -20,8 +20,8 @@ export function crearMesa(config: GameConfig): Mesa {
   return {
     config,
     mapa,
-    tablero: generarTablero(mapa, config.semilla),
-    puertos: generarPuertos(mapa, config.semilla),
+    tablero: generarTablero(mapa, config.semillaMapa),
+    puertos: generarPuertos(mapa, config.semillaMapa),
     vertice: (id) => vertices.get(id),
     arista: (id) => aristas.get(id),
   };

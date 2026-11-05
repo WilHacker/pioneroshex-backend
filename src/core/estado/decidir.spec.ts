@@ -14,9 +14,14 @@ const accionesDe = (jugador: string): Accion[] => [
   { tipo: 'COLOCAR_POBLADO_INICIAL', jugador, vertice },
   { tipo: 'COLOCAR_CAMINO_INICIAL', jugador, arista },
   { tipo: 'TIRAR_DADOS', jugador },
+  { tipo: 'DESCARTAR_RECURSOS', jugador, recursos: {} },
+  { tipo: 'DESCARTE_AUTOMATICO', jugador },
+  { tipo: 'MOVER_LADRON', jugador, destino: mesa.tablero.casillas[0]!.hex, victima: null },
+  { tipo: 'SALTAR_TURNO_POR_INACTIVIDAD', jugador },
   { tipo: 'CONSTRUIR_CAMINO', jugador, arista },
   { tipo: 'CONSTRUIR_POBLADO', jugador, vertice },
   { tipo: 'CONSTRUIR_CIUDAD', jugador, vertice },
+  { tipo: 'CAMBIAR_CON_BANCA', jugador, entrega: 'MADERA', recibe: 'TRIGO' },
   { tipo: 'TERMINAR_TURNO', jugador },
 ];
 
@@ -40,9 +45,9 @@ describe('decidir: comprobaciones generales', () => {
     );
   });
 
-  it('los 7 tipos de acción tienen manejador', () => {
+  it('todos los tipos de acción tienen manejador', () => {
     const tipos = accionesDe(j0).map((a) => a.tipo);
-    expect(tipos).toHaveLength(7);
+    expect(tipos).toHaveLength(12);
     expect(Object.keys(manejadores).toSorted()).toEqual(tipos.toSorted());
     for (const tipo of tipos) expect(manejadores[tipo]).toBeTypeOf('function');
   });

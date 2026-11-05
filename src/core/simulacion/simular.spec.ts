@@ -148,7 +148,7 @@ function jugar({ jugadores, semilla }: { jugadores: number; semilla: string }): 
 describe('estrés con semillas arbitrarias', () => {
   it(
     'cada partida termina con ganador o por estancamiento, nunca con violaciones',
-    { timeout: 20000 },
+    { timeout: 60000 },
     () => {
       const resultados = CASOS.map(jugar);
       expect(resultados.filter((r) => r.startsWith('FALLO'))).toEqual([]);

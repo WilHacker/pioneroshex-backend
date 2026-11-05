@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { crearGameConfig } from '../partida/game-config.js';
 import type { LimitesDePiezas } from '../reglas/costos.js';
-import type { Recurso } from '../reglas/recursos.js';
+import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { accionesDisponibles, enumerarAcciones } from './acciones.js';
 import { aplicar } from './aplicar.js';
 import { crearPartida } from './crear.js';
@@ -14,9 +14,14 @@ const TIPOS: readonly Accion['tipo'][] = [
   'COLOCAR_POBLADO_INICIAL',
   'COLOCAR_CAMINO_INICIAL',
   'TIRAR_DADOS',
+  'DESCARTAR_RECURSOS',
+  'DESCARTE_AUTOMATICO',
+  'MOVER_LADRON',
+  'SALTAR_TURNO_POR_INACTIVIDAD',
   'CONSTRUIR_CAMINO',
   'CONSTRUIR_POBLADO',
   'CONSTRUIR_CIUDAD',
+  'CAMBIAR_CON_BANCA',
   'TERMINAR_TURNO',
 ];
 const SOBRADO: Record<Recurso, number> = { MADERA: 9, LADRILLO: 9, OVEJA: 9, TRIGO: 9, MINERAL: 9 };
@@ -33,9 +38,26 @@ function todasLasCandidatas(mesa: Mesa, jugador: JugadorId): Accion[] {
     ...vertices.map((vertice): Accion => ({ tipo: 'COLOCAR_POBLADO_INICIAL', jugador, vertice })),
     ...aristas.map((arista): Accion => ({ tipo: 'COLOCAR_CAMINO_INICIAL', jugador, arista })),
     { tipo: 'TIRAR_DADOS', jugador },
+    { tipo: 'DESCARTAR_RECURSOS', jugador, recursos: {} },
+    { tipo: 'DESCARTE_AUTOMATICO', jugador },
+    ...mesa.mapa.casillas.flatMap((c): Accion[] => [
+      { tipo: 'MOVER_LADRON', jugador, destino: c, victima: null },
+      ...Array.from({ length: mesa.config.jugadores }, (_, i) => `j${i}`)
+        .filter((id) => id !== jugador)
+        .map((victima): Accion => ({ tipo: 'MOVER_LADRON', jugador, destino: c, victima })),
+    ]),
+    { tipo: 'SALTAR_TURNO_POR_INACTIVIDAD', jugador },
     ...aristas.map((arista): Accion => ({ tipo: 'CONSTRUIR_CAMINO', jugador, arista })),
     ...vertices.map((vertice): Accion => ({ tipo: 'CONSTRUIR_POBLADO', jugador, vertice })),
     ...vertices.map((vertice): Accion => ({ tipo: 'CONSTRUIR_CIUDAD', jugador, vertice })),
+    ...RECURSOS.flatMap((entrega) =>
+      RECURSOS.filter((recibe) => recibe !== entrega).map((recibe): Accion => ({
+        tipo: 'CAMBIAR_CON_BANCA',
+        jugador,
+        entrega,
+        recibe,
+      })),
+    ),
     { tipo: 'TERMINAR_TURNO', jugador },
   ];
 }
@@ -48,7 +70,9 @@ function comprobarEstado(mesa: Mesa, estado: Estado): readonly Accion[] {
   const foto = structuredClone(estado);
   const delTurno = enumerarAcciones(mesa, estado, enTurno(estado));
   // Discrimina: ni vacío ni «todo» (hay candidatas legales e ilegales).
-  expect(delTurno.length).toBeGreaterThan(0);
+  if (estado.fase !== 'DESCARTE' || estado.descartesPendientes[enTurno(estado)]) {
+    expect(delTurno.length).toBeGreaterThan(0);
+  }
   expect(delTurno.length).toBeLessThan(todasLasCandidatas(mesa, enTurno(estado)).length);
 
   for (const { id } of estado.jugadores) {
@@ -64,16 +88,20 @@ function comprobarEstado(mesa: Mesa, estado: Estado): readonly Accion[] {
       .filter((a) => aplicar(mesa, estado, a).ok !== claves.has(claveDe(a)))
       .map(claveDe);
     expect(desacuerdos).toEqual([]);
-    if (id !== enTurno(estado)) expect(enumeradas).toEqual([]);
+    if (estado.fase !== 'DESCARTE' && id !== enTurno(estado)) expect(enumeradas).toEqual([]);
     const disponibles = accionesDisponibles(mesa, estado, id);
     expect(disponibles.map((d) => d.tipo)).toEqual(TIPOS);
     for (const d of disponibles) {
       expect(d.disponible).toBe(enumeradas.some((a) => a.tipo === d.tipo));
-      if (id !== enTurno(estado)) expect(d.motivo).toBe('NO_ES_TU_TURNO');
+      if (estado.fase !== 'DESCARTE' && id !== enTurno(estado)) {
+        expect(d.motivo).toBe('NO_ES_TU_TURNO');
+      }
     }
   }
   expect(estado).toEqual(foto);
-  return delTurno;
+  return delTurno.length > 0
+    ? delTurno
+    : estado.jugadores.flatMap((j) => enumerarAcciones(mesa, estado, j.id));
 }
 
 const conRecursos = (estado: Estado, recursos: Record<Recurso, number>): Estado =>
@@ -223,14 +251,19 @@ describe('accionesDisponibles: ayuda por tipo', () => {
       COLOCAR_POBLADO_INICIAL: 'FASE_INCORRECTA',
       COLOCAR_CAMINO_INICIAL: 'FASE_INCORRECTA',
       TIRAR_DADOS: 'FASE_INCORRECTA',
+      DESCARTAR_RECURSOS: 'FASE_INCORRECTA',
+      DESCARTE_AUTOMATICO: 'FASE_INCORRECTA',
+      MOVER_LADRON: 'FASE_INCORRECTA',
+      SALTAR_TURNO_POR_INACTIVIDAD: 'OK',
       CONSTRUIR_CAMINO: 'RECURSOS_INSUFICIENTES',
       CONSTRUIR_POBLADO: 'RECURSOS_INSUFICIENTES',
       CONSTRUIR_CIUDAD: 'RECURSOS_INSUFICIENTES',
+      CAMBIAR_CON_BANCA: 'RECURSOS_INSUFICIENTES',
       TERMINAR_TURNO: 'OK',
     });
   });
 
-  it('fuera de su turno: los 7 tipos con NO_ES_TU_TURNO y nada enumerado', () => {
+  it('fuera de su turno: los tipos con NO_ES_TU_TURNO y nada enumerado', () => {
     const rico = conRecursos(principal, SOBRADO);
     expect(accionesDisponibles(mesa, rico, j1)).toEqual(
       TIPOS.map((tipo) => ({ tipo, disponible: false, motivo: 'NO_ES_TU_TURNO' })),

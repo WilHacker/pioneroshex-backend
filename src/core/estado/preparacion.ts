@@ -21,6 +21,8 @@ function recursosIniciales(mesa: Mesa, jugador: string, vertice: string): Evento
       jugador,
       recurso,
       cantidad: 1,
+      pedido: 1,
+      recortado: 0,
       causa: { tipo: 'PREPARACION', vertice, casilla: clave(hex) },
     });
   }

@@ -48,10 +48,36 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
       estado.dados = [...evento.dados];
       estado.tiradas += 1;
       return;
+    case 'DESCARTE_REQUERIDO':
+      estado.descartesPendientes[evento.jugador] = evento.cantidad;
+      return;
+    case 'RECURSOS_DESCARTADOS': {
+      const jugador = jugadorDe(estado, evento.jugador);
+      pagar(estado, jugador, evento.recursos);
+      delete estado.descartesPendientes[evento.jugador];
+      return;
+    }
+    case 'LADRON_MOVIDO':
+      estado.ladron = { ...evento.destino };
+      return;
+    case 'CARTA_ROBADA':
+      if (evento.recurso !== null) {
+        jugadorDe(estado, evento.victima).recursos[evento.recurso] -= 1;
+        jugadorDe(estado, evento.ladron).recursos[evento.recurso] += 1;
+      }
+      return;
     case 'RECURSOS_REPARTIDOS':
       jugadorDe(estado, evento.jugador).recursos[evento.recurso] += evento.cantidad;
       estado.banco[evento.recurso] -= evento.cantidad;
       return;
+    case 'CAMBIO_CON_BANCA_REALIZADO': {
+      const jugador = jugadorDe(estado, evento.jugador);
+      jugador.recursos[evento.entrega] -= evento.cantidadEntregada;
+      jugador.recursos[evento.recibe] += evento.cantidadRecibida;
+      estado.banco[evento.entrega] += evento.cantidadEntregada;
+      estado.banco[evento.recibe] -= evento.cantidadRecibida;
+      return;
+    }
     case 'PRODUCCION_BLOQUEADA':
       return;
     case 'FASE_CAMBIADA':
