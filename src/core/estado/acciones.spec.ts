@@ -210,7 +210,7 @@ describe('enumerarAcciones: propiedad sobre varias semillas', () => {
       ),
       { numRuns: 8 },
     );
-  }, 20_000); // recorre cientos de estados; margen para CI lenta y cobertura
+  }, 60_000); // recorre cientos de estados; margen para CI lenta y cobertura
 });
 
 // Estado fijo en FASE_PRINCIPAL: j0 con poblado en `centro` y camino centro-n0.
