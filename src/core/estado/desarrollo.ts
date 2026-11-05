@@ -8,6 +8,7 @@ import { faltaPara } from './falta.js';
 import { evaluarGranRuta } from './gran-ruta.js';
 import type { Mesa } from './mesa.js';
 import { puntosDe } from './puntos.js';
+import { victimasPosibles } from './victimas.js';
 import type { Accion, Decision, Estado, Evento, JugadorId, ResultadoRegla } from './tipos.js';
 
 function validarJugable(
@@ -72,35 +73,18 @@ export function decidirJugarCaballero(mesa: Mesa, estado: Estado, accion: Accion
   if (!esCasillaValida) return { ok: false, motivo: 'DESTINO_INVALIDO' };
 
   if (estado.ladron && clave(estado.ladron) === claveDestino) {
-    return { ok: false, motivo: 'MISMO_DESTINO' };
+    return { ok: false, motivo: 'MISMO_DESTINO', detalle: { ladronEn: { ...estado.ladron } } };
   }
 
-  const verticesCasilla = mesa.mapa.vertices.filter((v) =>
-    v.casillas.some((c) => clave(c) === claveDestino),
-  );
-
-  const rivalesConEdificios = new Set<JugadorId>();
-  for (const vertice of verticesCasilla) {
-    const edificio = estado.edificios[vertice.id];
-    if (edificio && edificio.dueno !== accion.jugador) {
-      rivalesConEdificios.add(edificio.dueno);
-    }
-  }
-
-  const rivalesConCartas: JugadorId[] = [];
-  for (const rId of rivalesConEdificios) {
-    const jugador = estado.jugadores.find((j) => j.id === rId);
-    if (jugador) {
-      const totalCartas = RECURSOS.reduce((s, r) => s + jugador.recursos[r], 0);
-      if (totalCartas > 0) rivalesConCartas.push(rId);
-    }
-  }
+  const rivalesConCartas = victimasPosibles(mesa, estado, accion.jugador, accion.destino);
 
   let recursoRobado: Recurso | null = null;
   if (rivalesConCartas.length > 0) {
-    if (accion.victima === null) return { ok: false, motivo: 'VICTIMA_REQUERIDA' };
-    if (!rivalesConCartas.includes(accion.victima))
-      return { ok: false, motivo: 'VICTIMA_INVALIDA' };
+    const detalle = { victimasPosibles: rivalesConCartas };
+    if (accion.victima === null) return { ok: false, motivo: 'VICTIMA_REQUERIDA', detalle };
+    if (!rivalesConCartas.includes(accion.victima)) {
+      return { ok: false, motivo: 'VICTIMA_INVALIDA', detalle };
+    }
 
     const victimaJugador = estado.jugadores.find((j) => j.id === accion.victima)!;
     const cartasVictima: Recurso[] = [];
@@ -253,7 +237,11 @@ export function decidirJugarConstruccionCarreteras(
   if (maxCaminos === 0) return { ok: false, motivo: 'SIN_PIEZAS' };
 
   if (accion.aristas.length > maxCaminos) {
-    return { ok: false, motivo: 'ARISTAS_INVALIDAS' };
+    return {
+      ok: false,
+      motivo: 'ARISTAS_INVALIDAS',
+      detalle: { maximo: maxCaminos, pedidas: accion.aristas.length },
+    };
   }
 
   const [a1, a2] = accion.aristas;
@@ -261,7 +249,9 @@ export function decidirJugarConstruccionCarreteras(
   if (!val1.ok) return val1;
 
   if (a2) {
-    if (a1 === a2) return { ok: false, motivo: 'ARISTA_OCUPADA' };
+    if (a1 === a2) {
+      return { ok: false, motivo: 'ARISTA_OCUPADA', detalle: { dueno: accion.jugador } };
+    }
     // Simula haber colocado a1
     const estadoConA1: Estado = {
       ...estado,

@@ -2,7 +2,8 @@ import { clave } from '../mapa/coordenadas.js';
 import { crearRng, mezclar } from '../reglas/azar.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import type { Mesa } from './mesa.js';
-import type { Accion, CausaAccion, Decision, Estado, Evento, JugadorId } from './tipos.js';
+import type { Accion, CausaAccion, Decision, Estado, Evento } from './tipos.js';
+import { victimasPosibles } from './victimas.js';
 import { decidirFinDeTurno, decidirPasarConstruccionEspecial, decidirTirada } from './turno.js';
 
 export function decidirLadrón(
@@ -23,33 +24,10 @@ export function decidirLadrón(
 
   // Verifica que no sea la misma casilla actual
   if (estado.ladron && clave(estado.ladron) === claveDestino) {
-    return { ok: false, motivo: 'MISMO_DESTINO' };
+    return { ok: false, motivo: 'MISMO_DESTINO', detalle: { ladronEn: { ...estado.ladron } } };
   }
 
-  // Encuentra rivales con edificios en vértices de la casilla destino
-  const verticesCasilla = mesa.mapa.vertices.filter((v) =>
-    v.casillas.some((c) => clave(c) === claveDestino),
-  );
-
-  const rivalesConEdificios = new Set<JugadorId>();
-  for (const vertice of verticesCasilla) {
-    const edificio = estado.edificios[vertice.id];
-    if (edificio && edificio.dueno !== accion.jugador) {
-      rivalesConEdificios.add(edificio.dueno);
-    }
-  }
-
-  // Filtra rivales que tienen al menos 1 carta en mano
-  const rivalesConCartas: JugadorId[] = [];
-  for (const rId of rivalesConEdificios) {
-    const jugador = estado.jugadores.find((j) => j.id === rId);
-    if (jugador) {
-      const totalCartas = RECURSOS.reduce((s, r) => s + jugador.recursos[r], 0);
-      if (totalCartas > 0) {
-        rivalesConCartas.push(rId);
-      }
-    }
-  }
+  const rivalesConCartas = victimasPosibles(mesa, estado, accion.jugador, accion.destino);
 
   const eventos: Evento[] = [
     {
@@ -62,10 +40,18 @@ export function decidirLadrón(
 
   if (rivalesConCartas.length > 0) {
     if (accion.victima === null) {
-      return { ok: false, motivo: 'VICTIMA_REQUERIDA' };
+      return {
+        ok: false,
+        motivo: 'VICTIMA_REQUERIDA',
+        detalle: { victimasPosibles: rivalesConCartas },
+      };
     }
     if (!rivalesConCartas.includes(accion.victima)) {
-      return { ok: false, motivo: 'VICTIMA_INVALIDA' };
+      return {
+        ok: false,
+        motivo: 'VICTIMA_INVALIDA',
+        detalle: { victimasPosibles: rivalesConCartas },
+      };
     }
 
     // Roba una carta al azar de la víctima de forma determinista

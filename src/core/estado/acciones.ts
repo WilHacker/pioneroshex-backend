@@ -3,6 +3,7 @@ import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { puedeColocarCamino } from './conectividad.js';
 import { decidir } from './decidir.js';
 import type { Mesa } from './mesa.js';
+import { victimasPosibles } from './victimas.js';
 import type { Accion, Estado, JugadorId, MotivoAccion, Rechazo } from './tipos.js';
 
 export interface AccionDisponible {
@@ -43,30 +44,15 @@ const moverLadron: Candidatas = (mesa, jugador, estado) => {
     }));
   }
   return mesa.mapa.casillas.flatMap((c): Accion[] => {
-    const cClave = `${c.q},${c.r},${c.s}`;
-    const vertices = mesa.mapa.vertices.filter((v) =>
-      v.casillas.some((cas) => `${cas.q},${cas.r},${cas.s}` === cClave),
-    );
-    const rivalesConCartas = Array.from(
-      new Set(
-        vertices
-          .map((v) => estado.edificios[v.id]?.dueno)
-          .filter((id): id is JugadorId => Boolean(id && id !== jugador)),
-      ),
-    ).filter((rId) => {
-      const rJug = estado.jugadores.find((j) => j.id === rId);
-      return rJug && RECURSOS.some((rec) => rJug.recursos[rec] > 0);
-    });
-
-    if (rivalesConCartas.length > 0) {
-      return rivalesConCartas.map((victima): Accion => ({
-        tipo: 'MOVER_LADRON',
-        jugador,
-        destino: c,
-        victima,
-      }));
-    }
-    return [{ tipo: 'MOVER_LADRON', jugador, destino: c, victima: null }];
+    const victimas = victimasPosibles(mesa, estado, jugador, c);
+    if (victimas.length === 0)
+      return [{ tipo: 'MOVER_LADRON', jugador, destino: c, victima: null }];
+    return victimas.map((victima): Accion => ({
+      tipo: 'MOVER_LADRON',
+      jugador,
+      destino: c,
+      victima,
+    }));
   });
 };
 
@@ -84,30 +70,15 @@ const jugarCaballero: Candidatas = (mesa, jugador, estado) => {
     }));
   }
   return mesa.mapa.casillas.flatMap((c): Accion[] => {
-    const cClave = `${c.q},${c.r},${c.s}`;
-    const vertices = mesa.mapa.vertices.filter((v) =>
-      v.casillas.some((cas) => `${cas.q},${cas.r},${cas.s}` === cClave),
-    );
-    const rivalesConCartas = Array.from(
-      new Set(
-        vertices
-          .map((v) => estado.edificios[v.id]?.dueno)
-          .filter((id): id is JugadorId => Boolean(id && id !== jugador)),
-      ),
-    ).filter((rId) => {
-      const rJug = estado.jugadores.find((j) => j.id === rId);
-      return rJug && RECURSOS.some((rec) => rJug.recursos[rec] > 0);
-    });
-
-    if (rivalesConCartas.length > 0) {
-      return rivalesConCartas.map((victima): Accion => ({
-        tipo: 'JUGAR_CABALLERO',
-        jugador,
-        destino: c,
-        victima,
-      }));
-    }
-    return [{ tipo: 'JUGAR_CABALLERO', jugador, destino: c, victima: null }];
+    const victimas = victimasPosibles(mesa, estado, jugador, c);
+    if (victimas.length === 0)
+      return [{ tipo: 'JUGAR_CABALLERO', jugador, destino: c, victima: null }];
+    return victimas.map((victima): Accion => ({
+      tipo: 'JUGAR_CABALLERO',
+      jugador,
+      destino: c,
+      victima,
+    }));
   });
 };
 

@@ -93,8 +93,31 @@ describe('verificarInvariantes', () => {
       1,
     );
     expect(violaciones(conCambios(sano, { fase: 'FIN' }), /^GANADOR_INCOHERENTE/)).toHaveLength(1);
-    expect(verificarInvariantes(mesa, conCambios(sano, { fase: 'FIN', ganador: 'ana' }))).toEqual(
-      [],
-    );
+    expect(
+      violaciones(conCambios(sano, { fase: 'FIN', ganador: 'ana' }), /^GANADOR_INCOHERENTE/),
+    ).toEqual([]);
+  });
+
+  it('detecta un ganador que no alcanzó los puntos de victoria', () => {
+    const sinPuntos = conCambios(sano, { fase: 'FIN', ganador: 'ana' });
+    expect(violaciones(sinPuntos, /^GANADOR_SIN_PUNTOS:ana/)).toHaveLength(1);
+    const metaBaja = conCambios(sinPuntos, { config: { ...sano.config, puntosVictoria: 2 } });
+    expect(violaciones(metaBaja, /^GANADOR_SIN_PUNTOS/)).toEqual([]);
+  });
+
+  it('detecta descartes pendientes fuera de la fase DESCARTE, o la fase sin descartes', () => {
+    const fuera = conCambios(sano, { descartesPendientes: { ana: 2 } });
+    expect(violaciones(fuera, /^DESCARTES_INCOHERENTES/)).toHaveLength(1);
+    const vacia = conCambios(sano, { fase: 'DESCARTE', descartesPendientes: {} });
+    expect(violaciones(vacia, /^DESCARTES_INCOHERENTES/)).toHaveLength(1);
+    const imposible = conCambios(sano, { fase: 'DESCARTE', descartesPendientes: { ana: 999 } });
+    expect(violaciones(imposible, /^DESCARTE_IMPOSIBLE:ana/)).toHaveLength(1);
+  });
+
+  it('detecta cartas de desarrollo creadas de la nada', () => {
+    const otroCaballero = conCambios(sano, { mazo: [...sano.mazo, 'CABALLERO'] });
+    expect(violaciones(otroCaballero, /^CABALLEROS_DESCUADRADOS/)).toHaveLength(1);
+    const otroPunto = conCambios(sano, { mazo: [...sano.mazo, 'PUNTO_VICTORIA'] });
+    expect(violaciones(otroPunto, /^CARTA_SOBRANTE:PUNTO_VICTORIA/)).toHaveLength(1);
   });
 });

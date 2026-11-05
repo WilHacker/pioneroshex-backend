@@ -1,4 +1,4 @@
-import { produce } from 'immer';
+import { type Draft, produce } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { crearPartida } from './crear.js';
 import {
@@ -92,6 +92,63 @@ describe('desarrollo', () => {
       expect(tipos).toContain('CABALLERO_JUGADO');
       expect(tipos).toContain('CARTA_ROBADA');
       expect(tipos).toContain('GRAN_EJERCITO_CAMBIADO');
+    });
+
+    describe('rechazos con datos', () => {
+      const c1 = mesa.mapa.casillas[1]!;
+      const vDestino = mesa.mapa.vertices.find((v) =>
+        v.casillas.some((cas) => cas.q === c1.q && cas.r === c1.r),
+      )!;
+      const conCaballero = (cambios: (b: Draft<Estado>) => void): Estado =>
+        produce(estadoListo(), (b) => {
+          b.edificios[vDestino.id] = { dueno: j1, tipo: 'POBLADO' };
+          b.jugadores[0]!.cartasDesarrollo = ['CABALLERO'];
+          cambios(b);
+        });
+      const jugar = (estado: Estado, victima: string | null) =>
+        decidirJugarCaballero(mesa, estado, {
+          tipo: 'JUGAR_CABALLERO',
+          jugador: j0,
+          destino: c1,
+          victima,
+        });
+
+      it('VICTIMA_REQUERIDA dice a quién se puede robar', () => {
+        expect(
+          jugar(
+            conCaballero(() => {}),
+            null,
+          ),
+        ).toEqual({
+          ok: false,
+          motivo: 'VICTIMA_REQUERIDA',
+          detalle: { victimasPosibles: [j1] },
+        });
+      });
+
+      it('VICTIMA_INVALIDA dice a quién se puede robar', () => {
+        expect(
+          jugar(
+            conCaballero(() => {}),
+            j0,
+          ),
+        ).toEqual({
+          ok: false,
+          motivo: 'VICTIMA_INVALIDA',
+          detalle: { victimasPosibles: [j1] },
+        });
+      });
+
+      it('MISMO_DESTINO dice dónde está ya el ladrón', () => {
+        const estado = conCaballero((b) => {
+          b.ladron = { ...c1 };
+        });
+        expect(jugar(estado, j1)).toEqual({
+          ok: false,
+          motivo: 'MISMO_DESTINO',
+          detalle: { ladronEn: c1 },
+        });
+      });
     });
 
     it('no permite jugar una carta comprada en el mismo turno', () => {
@@ -207,6 +264,51 @@ describe('desarrollo', () => {
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       expect(r.eventos[0]?.tipo).toBe('CONSTRUCCION_CARRETERAS_JUGADA');
+    });
+
+    describe('rechazos con datos', () => {
+      const v0 = mesa.mapa.vertices[0]!;
+      const v1 = mesa.vertice(v0.vecinos[0]!)!;
+      const v2 = mesa.vertice(v1.vecinos.find((id) => id !== v0.id)!)!;
+      const e1 = aristaEntre(mesa, v0.id, v1.id);
+      const e2 = aristaEntre(mesa, v1.id, v2.id);
+      const conRed = (cambios: (b: Draft<Estado>) => void): Estado =>
+        produce(estadoListo(), (b) => {
+          b.edificios[v0.id] = { dueno: j0, tipo: 'POBLADO' };
+          b.caminos[e1] = j0;
+          b.jugadores[0]!.cartasDesarrollo = ['CONSTRUCCION_CARRETERAS'];
+          cambios(b);
+        });
+      const jugar = (estado: Estado, aristas: readonly [string] | readonly [string, string]) =>
+        decidirJugarConstruccionCarreteras(mesa, estado, {
+          tipo: 'JUGAR_CONSTRUCCION_CARRETERAS',
+          jugador: j0,
+          aristas,
+        });
+
+      it('ARISTAS_INVALIDAS dice cuántos caminos se podían poner y cuántos se pidieron', () => {
+        const estado = conRed((b) => {
+          b.jugadores[0]!.piezasRestantes.caminos = 1;
+        });
+        expect(jugar(estado, [e2, aristaEntre(mesa, v2.id, v2.vecinos[0]!)])).toEqual({
+          ok: false,
+          motivo: 'ARISTAS_INVALIDAS',
+          detalle: { maximo: 1, pedidas: 2 },
+        });
+      });
+
+      it('pedir dos veces la misma arista es ARISTA_OCUPADA por tu propio primer camino', () => {
+        expect(
+          jugar(
+            conRed(() => {}),
+            [e2, e2],
+          ),
+        ).toEqual({
+          ok: false,
+          motivo: 'ARISTA_OCUPADA',
+          detalle: { dueno: j0 },
+        });
+      });
     });
   });
 });

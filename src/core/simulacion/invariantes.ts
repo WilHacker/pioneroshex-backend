@@ -1,6 +1,8 @@
 import type { Mesa } from '../estado/mesa.js';
 import type { Estado } from '../estado/tipos.js';
+import { puntosDe } from '../estado/puntos.js';
 import { limitesDePiezas, type LimitesDePiezas } from '../reglas/costos.js';
+import { composicionDelMazo, type CartaDesarrollo } from '../reglas/mazo.js';
 import { RECURSOS } from '../reglas/recursos.js';
 
 /*
@@ -112,6 +114,62 @@ function granRutaCoherente(estado: Estado): string[] {
   return [];
 }
 
+/** El ganador tiene, contando sus cartas ocultas, al menos los puntos de victoria de la partida. */
+function ganadorAlcanzaMeta(estado: Estado): string[] {
+  if (estado.ganador === null) return [];
+  const puntos = puntosDe(estado, estado.ganador, { incluirOcultos: true });
+  return puntos >= estado.config.puntosVictoria
+    ? []
+    : [`GANADOR_SIN_PUNTOS:${estado.ganador}:${puntos}/${estado.config.puntosVictoria}`];
+}
+
+/** Descartes pendientes solo en la fase DESCARTE, siempre alguno, y nunca más cartas que la mano. */
+function descartesCoherentes(estado: Estado): string[] {
+  const pendientes = Object.entries(estado.descartesPendientes);
+  const violaciones: string[] = [];
+  if ((estado.fase === 'DESCARTE') !== pendientes.length > 0) {
+    violaciones.push(`DESCARTES_INCOHERENTES:${estado.fase}:${pendientes.length}`);
+  }
+  for (const [id, cantidad] of pendientes) {
+    const jugador = estado.jugadores.find((j) => j.id === id);
+    const mano = jugador ? RECURSOS.reduce((s, r) => s + jugador.recursos[r], 0) : 0;
+    if (!Number.isInteger(cantidad) || cantidad <= 0 || cantidad > mano) {
+      violaciones.push(`DESCARTE_IMPOSIBLE:${id}:${cantidad}/${mano}`);
+    }
+  }
+  return violaciones;
+}
+
+/**
+ * Las cartas de desarrollo no se crean de la nada: mazo + manos + caballeros jugados no superan
+ * la composición del mazo. Los caballeros nunca se gastan (quedan contados en `caballerosJugados`),
+ * así que ahí la suma es exacta; las demás cartas se gastan al jugarse y solo pueden sobrar.
+ */
+function cartasDesarrolloCuadran(estado: Estado): string[] {
+  const total = composicionDelMazo(estado.jugadores.length);
+  const enMano = (carta: CartaDesarrollo): number =>
+    estado.jugadores.reduce(
+      (s, j) =>
+        s +
+        j.cartasDesarrollo.filter((c) => c === carta).length +
+        j.cartasCompradasEsteTurno.filter((c) => c === carta).length,
+      0,
+    );
+  const enMazo = (carta: CartaDesarrollo): number => estado.mazo.filter((c) => c === carta).length;
+  const jugados = estado.jugadores.reduce((s, j) => s + j.caballerosJugados, 0);
+  const violaciones: string[] = [];
+  const caballeros = enMazo('CABALLERO') + enMano('CABALLERO') + jugados;
+  if (caballeros !== total.CABALLERO) {
+    violaciones.push(`CABALLEROS_DESCUADRADOS:${caballeros}/${total.CABALLERO}`);
+  }
+  for (const carta of Object.keys(total) as CartaDesarrollo[]) {
+    if (carta !== 'CABALLERO' && enMazo(carta) + enMano(carta) > total[carta]) {
+      violaciones.push(`CARTA_SOBRANTE:${carta}`);
+    }
+  }
+  return violaciones;
+}
+
 /** Lista de violaciones de las invariantes del estado; vacía si todo cuadra. No muta nada. */
 export function verificarInvariantes(mesa: Mesa, estado: Estado): readonly string[] {
   return [
@@ -123,5 +181,8 @@ export function verificarInvariantes(mesa: Mesa, estado: Estado): readonly strin
     ...turnoYGanador(estado),
     ...granEjercitoCoherente(estado),
     ...granRutaCoherente(estado),
+    ...ganadorAlcanzaMeta(estado),
+    ...descartesCoherentes(estado),
+    ...cartasDesarrolloCuadran(estado),
   ];
 }

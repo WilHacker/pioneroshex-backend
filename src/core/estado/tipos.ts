@@ -296,6 +296,13 @@ export interface DetalleRechazo {
   /** Cartas que había que descartar y cuántas se entregaron (CANTIDAD_DESCARTE_INCORRECTA). */
   readonly requerido?: number;
   readonly entregado?: number;
+  /** Rivales con edificio junto a la casilla y cartas en mano: a quién se puede robar. */
+  readonly victimasPosibles?: readonly JugadorId[];
+  /** Casilla donde ya está el ladrón (MISMO_DESTINO). */
+  readonly ladronEn?: Hex;
+  /** Caminos que se podían poner y cuántos se pidieron (ARISTAS_INVALIDAS). */
+  readonly maximo?: number;
+  readonly pedidas?: number;
 }
 export interface Rechazo {
   readonly ok: false;

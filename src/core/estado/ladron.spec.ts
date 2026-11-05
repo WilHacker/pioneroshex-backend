@@ -79,6 +79,7 @@ describe('MOVER_LADRON: decidirLadrón', () => {
     expect(decidir(mesa, estadoMover, accion)).toEqual({
       ok: false,
       motivo: 'MISMO_DESTINO',
+      detalle: { ladronEn: casillaInicial },
     });
   });
 
@@ -93,6 +94,7 @@ describe('MOVER_LADRON: decidirLadrón', () => {
     expect(decidir(mesa, conCartas, accion)).toEqual({
       ok: false,
       motivo: 'VICTIMA_REQUERIDA',
+      detalle: { victimasPosibles: [j1] },
     });
   });
 
@@ -108,6 +110,7 @@ describe('MOVER_LADRON: decidirLadrón', () => {
     expect(decidir(mesa, conCartas, accion)).toEqual({
       ok: false,
       motivo: 'VICTIMA_INVALIDA',
+      detalle: { victimasPosibles: [j1] },
     });
   });
 
