@@ -11,11 +11,21 @@ export type Fase =
   | 'DESCARTE'
   | 'MOVER_LADRON'
   | 'FASE_PRINCIPAL'
+  | 'CONSTRUCCION_ESPECIAL'
   | 'FIN';
 export type TipoEdificio = 'POBLADO' | 'CIUDAD';
 export interface Edificio {
   readonly dueno: JugadorId;
   readonly tipo: TipoEdificio;
+}
+export interface Trato {
+  readonly id: string;
+  readonly proponente: JugadorId;
+  readonly destinatario: JugadorId | null; // null = abierto a cualquier rival
+  readonly entrega: Readonly<Record<Recurso, number>>;
+  readonly pide: Readonly<Record<Recurso, number>>;
+  readonly rechazadoPor: readonly JugadorId[];
+  readonly contraofertaDe?: string;
 }
 export interface Jugador {
   readonly id: JugadorId;
@@ -30,6 +40,8 @@ export interface Estado {
   readonly pasoPreparacion: number; // 0..2n-1 en preparación; 2n después
   readonly pobladoPendiente: string | null; // vértice del poblado inicial sin camino
   readonly descartesPendientes: Readonly<Record<JugadorId, number>>;
+  readonly tratos: readonly Trato[];
+  readonly turnoEspecialDe: number | null; // índice durante CONSTRUCCION_ESPECIAL
   readonly edificios: Readonly<Record<string, Edificio>>; // por id de vértice
   readonly caminos: Readonly<Record<string, JugadorId>>; // por id de arista
   readonly banco: Readonly<Record<Recurso, number>>;
@@ -51,6 +63,24 @@ export type Accion =
   | { tipo: 'CONSTRUIR_POBLADO'; jugador: JugadorId; vertice: string }
   | { tipo: 'CONSTRUIR_CIUDAD'; jugador: JugadorId; vertice: string }
   | { tipo: 'CAMBIAR_CON_BANCA'; jugador: JugadorId; entrega: Recurso; recibe: Recurso }
+  | {
+      tipo: 'PROPONER_TRATO';
+      jugador: JugadorId;
+      entrega: Partial<Record<Recurso, number>>;
+      pide: Partial<Record<Recurso, number>>;
+      destinatario?: JugadorId | null;
+    }
+  | { tipo: 'ACEPTAR_TRATO'; jugador: JugadorId; tratoId: string }
+  | { tipo: 'RECHAZAR_TRATO'; jugador: JugadorId; tratoId: string }
+  | { tipo: 'CANCELAR_TRATO'; jugador: JugadorId; tratoId: string }
+  | {
+      tipo: 'CONTRAOFERTAR_TRATO';
+      jugador: JugadorId;
+      tratoIdOriginal: string;
+      entrega: Partial<Record<Recurso, number>>;
+      pide: Partial<Record<Recurso, number>>;
+    }
+  | { tipo: 'PASAR_CONSTRUCCION_ESPECIAL'; jugador: JugadorId }
   | { tipo: 'TERMINAR_TURNO'; jugador: JugadorId };
 export type Origen = 'PREPARACION' | 'CONSTRUCCION';
 export interface FuenteProduccion {
@@ -93,6 +123,31 @@ export type Evento =
       cantidadRecibida: 1;
     }
   | { tipo: 'PRODUCCION_BLOQUEADA'; recurso: Recurso; pedido: number; disponible: number }
+  | { tipo: 'TRATO_PROPUESTO'; trato: Trato }
+  | {
+      tipo: 'TRATO_ACEPTADO';
+      tratoId: string;
+      proponente: JugadorId;
+      aceptante: JugadorId;
+      entrega: Readonly<Record<Recurso, number>>;
+      pide: Readonly<Record<Recurso, number>>;
+    }
+  | { tipo: 'TRATO_RECHAZADO'; tratoId: string; jugador: JugadorId }
+  | {
+      tipo: 'TRATO_CANCELADO';
+      tratoId: string;
+      motivo: 'MANUAL' | 'RECURSOS_INSUFICIENTES' | 'FIN_DE_TURNO';
+    }
+  | {
+      tipo: 'FASE_ESPECIAL_INICIADA';
+      turnoOriginal: number;
+      primerConstructor: number;
+    }
+  | {
+      tipo: 'CONSTRUCCION_ESPECIAL_PASADA';
+      jugador: JugadorId;
+      siguienteConstructor: number | null;
+    }
   | { tipo: 'FASE_CAMBIADA'; fase: Fase; turnoDe: number; pasoPreparacion: number }
   | { tipo: 'TURNO_TERMINADO'; jugador: JugadorId; siguiente: number }
   | { tipo: 'PARTIDA_GANADA'; jugador: JugadorId; puntos: number };
@@ -122,7 +177,16 @@ export type MotivoAccion =
   | 'CAMINO_CORTADO'
   | 'CAMINO_NO_ADYACENTE'
   | 'NO_ES_TU_POBLADO'
-  | 'SIN_LUGAR_VALIDO';
+  | 'SIN_LUGAR_VALIDO'
+  | 'TRATO_INEXISTENTE'
+  | 'NO_ES_TU_TRATO'
+  | 'DESTINATARIO_INVALIDO'
+  | 'OFERTA_VACIA'
+  | 'PETICION_VACIA'
+  | 'INTERCAMBIO_SOLAPADO'
+  | 'TRATO_NO_DIRIGIDO_A_TI'
+  | 'YA_RECHAZADO'
+  | 'NO_PUEDES_COMERCIAR';
 export interface Rechazo {
   readonly ok: false;
   readonly motivo: MotivoAccion;

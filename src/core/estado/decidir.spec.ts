@@ -22,6 +22,18 @@ const accionesDe = (jugador: string): Accion[] => [
   { tipo: 'CONSTRUIR_POBLADO', jugador, vertice },
   { tipo: 'CONSTRUIR_CIUDAD', jugador, vertice },
   { tipo: 'CAMBIAR_CON_BANCA', jugador, entrega: 'MADERA', recibe: 'TRIGO' },
+  { tipo: 'PROPONER_TRATO', jugador, entrega: { MADERA: 1 }, pide: { TRIGO: 1 } },
+  { tipo: 'ACEPTAR_TRATO', jugador, tratoId: 't1' },
+  { tipo: 'RECHAZAR_TRATO', jugador, tratoId: 't1' },
+  { tipo: 'CANCELAR_TRATO', jugador, tratoId: 't1' },
+  {
+    tipo: 'CONTRAOFERTAR_TRATO',
+    jugador,
+    tratoIdOriginal: 't1',
+    entrega: { OVEJA: 1 },
+    pide: { MADERA: 1 },
+  },
+  { tipo: 'PASAR_CONSTRUCCION_ESPECIAL', jugador },
   { tipo: 'TERMINAR_TURNO', jugador },
 ];
 
@@ -47,7 +59,7 @@ describe('decidir: comprobaciones generales', () => {
 
   it('todos los tipos de acción tienen manejador', () => {
     const tipos = accionesDe(j0).map((a) => a.tipo);
-    expect(tipos).toHaveLength(12);
+    expect(tipos).toHaveLength(18);
     expect(Object.keys(manejadores).toSorted()).toEqual(tipos.toSorted());
     for (const tipo of tipos) expect(manejadores[tipo]).toBeTypeOf('function');
   });

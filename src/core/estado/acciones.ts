@@ -84,6 +84,56 @@ const CANDIDATAS: Record<Accion['tipo'], Candidatas> = {
   CONSTRUIR_POBLADO: porVertice('CONSTRUIR_POBLADO'),
   CONSTRUIR_CIUDAD: porVertice('CONSTRUIR_CIUDAD'),
   CAMBIAR_CON_BANCA: cambiosConBanca,
+  PROPONER_TRATO: (_mesa, jugador, estado) => {
+    if (estado && jugador !== estado.jugadores[estado.turnoDe]?.id) {
+      return [{ tipo: 'PROPONER_TRATO', jugador, entrega: {}, pide: {} }];
+    }
+    return RECURSOS.flatMap((entrega) =>
+      RECURSOS.filter((pide) => pide !== entrega).map((pide) => ({
+        tipo: 'PROPONER_TRATO' as const,
+        jugador,
+        entrega: { [entrega]: 1 },
+        pide: { [pide]: 1 },
+      })),
+    );
+  },
+  ACEPTAR_TRATO: (_mesa, jugador, estado) =>
+    estado?.tratos.length
+      ? estado.tratos.map((t) => ({ tipo: 'ACEPTAR_TRATO' as const, jugador, tratoId: t.id }))
+      : [{ tipo: 'ACEPTAR_TRATO' as const, jugador, tratoId: '' }],
+  RECHAZAR_TRATO: (_mesa, jugador, estado) =>
+    estado?.tratos.length
+      ? estado.tratos.map((t) => ({ tipo: 'RECHAZAR_TRATO' as const, jugador, tratoId: t.id }))
+      : [{ tipo: 'RECHAZAR_TRATO' as const, jugador, tratoId: '' }],
+  CANCELAR_TRATO: (_mesa, jugador, estado) => {
+    const propios = (estado?.tratos ?? []).filter((t) => t.proponente === jugador);
+    return propios.length
+      ? propios.map((t) => ({ tipo: 'CANCELAR_TRATO' as const, jugador, tratoId: t.id }))
+      : [{ tipo: 'CANCELAR_TRATO' as const, jugador, tratoId: '' }];
+  },
+  CONTRAOFERTAR_TRATO: (_mesa, jugador, estado) => {
+    const ajenos = (estado?.tratos ?? []).filter((t) => t.proponente !== jugador);
+    return ajenos.length
+      ? ajenos.map((t) => ({
+          tipo: 'CONTRAOFERTAR_TRATO' as const,
+          jugador,
+          tratoIdOriginal: t.id,
+          entrega: { ...t.pide },
+          pide: { ...t.entrega },
+        }))
+      : [
+          {
+            tipo: 'CONTRAOFERTAR_TRATO' as const,
+            jugador,
+            tratoIdOriginal: '',
+            entrega: {},
+            pide: {},
+          },
+        ];
+  },
+  PASAR_CONSTRUCCION_ESPECIAL: (_mesa, jugador) => [
+    { tipo: 'PASAR_CONSTRUCCION_ESPECIAL', jugador },
+  ],
   TERMINAR_TURNO: (_mesa, jugador) => [{ tipo: 'TERMINAR_TURNO', jugador }],
 };
 const TIPOS = Object.keys(CANDIDATAS) as Accion['tipo'][];
@@ -120,6 +170,15 @@ const ALCANCE: Readonly<Record<MotivoAccion, 'general' | 'lugar'>> = {
   CAMINO_NO_ADYACENTE: 'lugar',
   NO_ES_TU_POBLADO: 'lugar',
   SIN_LUGAR_VALIDO: 'lugar',
+  TRATO_INEXISTENTE: 'general',
+  NO_ES_TU_TRATO: 'general',
+  DESTINATARIO_INVALIDO: 'general',
+  OFERTA_VACIA: 'general',
+  PETICION_VACIA: 'general',
+  INTERCAMBIO_SOLAPADO: 'general',
+  TRATO_NO_DIRIGIDO_A_TI: 'general',
+  YA_RECHAZADO: 'general',
+  NO_PUEDES_COMERCIAR: 'general',
 };
 
 interface Evaluacion {

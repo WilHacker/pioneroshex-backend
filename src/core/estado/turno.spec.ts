@@ -180,4 +180,50 @@ describe('TERMINAR_TURNO', () => {
     expect(estado.fase).toBe('PRE_TIRADA');
     expect(estado.tiradas).toBe(n);
   });
+
+  describe('Modo B (turnRuleMode: B con 5+ jugadores)', () => {
+    it('inicia fase especial de construcción y da turno a cada rival en sentido horario', () => {
+      const m = mesaDePrueba({ jugadores: 5, turnRuleMode: 'B' });
+      const ids = ['j0', 'j1', 'j2', 'j3', 'j4'];
+      let estado = conCambios(crearPartida(m, ids), {
+        fase: 'FASE_PRINCIPAL',
+        turnoDe: 0,
+        pasoPreparacion: 10,
+      });
+
+      const rFin = aplicar(m, estado, terminar(estado.jugadores[0]!.id));
+      if (!rFin.ok) throw new Error(rFin.motivo);
+      estado = rFin.estado;
+
+      expect(estado.fase).toBe('CONSTRUCCION_ESPECIAL');
+      expect(estado.turnoEspecialDe).toBe(1);
+
+      // Los constructores especiales van pasando uno a uno
+      for (let i = 1; i <= 3; i++) {
+        const constructorId = estado.jugadores[estado.turnoEspecialDe!]!.id;
+        const rPasar = aplicar(m, estado, {
+          tipo: 'PASAR_CONSTRUCCION_ESPECIAL',
+          jugador: constructorId,
+        });
+        if (!rPasar.ok) throw new Error(rPasar.motivo);
+        estado = rPasar.estado;
+        expect(estado.fase).toBe('CONSTRUCCION_ESPECIAL');
+        expect(estado.turnoEspecialDe).toBe(i + 1);
+      }
+
+      // El último constructor especial (índice 4) pasa
+      const ultimoId = estado.jugadores[estado.turnoEspecialDe!]!.id;
+      const rUltimo = aplicar(m, estado, {
+        tipo: 'PASAR_CONSTRUCCION_ESPECIAL',
+        jugador: ultimoId,
+      });
+      if (!rUltimo.ok) throw new Error(rUltimo.motivo);
+      estado = rUltimo.estado;
+
+      // Se cierra la fase especial y pasa a PRE_TIRADA del siguiente turno normal (jugador 1)
+      expect(estado.fase).toBe('PRE_TIRADA');
+      expect(estado.turnoDe).toBe(1);
+      expect(estado.turnoEspecialDe).toBeNull();
+    });
+  });
 });

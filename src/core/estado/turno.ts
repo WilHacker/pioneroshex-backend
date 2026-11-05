@@ -55,11 +55,81 @@ export function decidirTirada(mesa: Mesa, estado: Estado, accion: Accion): Decis
   };
 }
 
-/** Termina el turno (solo en FASE_PRINCIPAL) y cede el turno al siguiente jugador. */
+/** Termina el turno (solo en FASE_PRINCIPAL) y cede el turno al siguiente jugador (o inicia fase especial en modo B). */
 export function decidirFinDeTurno(_mesa: Mesa, estado: Estado, accion: Accion): Decision {
   if (accion.tipo !== 'TERMINAR_TURNO' || estado.fase !== 'FASE_PRINCIPAL') {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
   }
+  const esModoB = estado.config.turnRuleMode === 'B' && estado.jugadores.length >= 5;
+  if (esModoB) {
+    const primerConstructor = (estado.turnoDe + 1) % estado.jugadores.length;
+    return {
+      ok: true,
+      eventos: [
+        {
+          tipo: 'FASE_ESPECIAL_INICIADA',
+          turnoOriginal: estado.turnoDe,
+          primerConstructor,
+        },
+        {
+          tipo: 'FASE_CAMBIADA',
+          fase: 'CONSTRUCCION_ESPECIAL',
+          turnoDe: estado.turnoDe,
+          pasoPreparacion: estado.pasoPreparacion,
+        },
+      ],
+    };
+  }
+
   const siguiente = (estado.turnoDe + 1) % estado.jugadores.length;
   return { ok: true, eventos: [{ tipo: 'TURNO_TERMINADO', jugador: accion.jugador, siguiente }] };
+}
+
+/** Cede el turno especial de construcción al siguiente rival (o cierra la fase si terminó la ronda). */
+export function decidirPasarConstruccionEspecial(
+  _mesa: Mesa,
+  estado: Estado,
+  accion: Accion,
+): Decision {
+  if (accion.tipo !== 'PASAR_CONSTRUCCION_ESPECIAL' || estado.fase !== 'CONSTRUCCION_ESPECIAL') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+  if (estado.turnoEspecialDe === null) {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+  const jugadorEspecial = estado.jugadores[estado.turnoEspecialDe];
+  if (!jugadorEspecial || jugadorEspecial.id !== accion.jugador) {
+    return { ok: false, motivo: 'NO_ES_TU_TURNO' };
+  }
+
+  const siguiente = (estado.turnoEspecialDe + 1) % estado.jugadores.length;
+  if (siguiente === estado.turnoDe) {
+    const siguienteNormal = (estado.turnoDe + 1) % estado.jugadores.length;
+    return {
+      ok: true,
+      eventos: [
+        {
+          tipo: 'CONSTRUCCION_ESPECIAL_PASADA',
+          jugador: accion.jugador,
+          siguienteConstructor: null,
+        },
+        {
+          tipo: 'TURNO_TERMINADO',
+          jugador: estado.jugadores[estado.turnoDe]!.id,
+          siguiente: siguienteNormal,
+        },
+      ],
+    };
+  }
+
+  return {
+    ok: true,
+    eventos: [
+      {
+        tipo: 'CONSTRUCCION_ESPECIAL_PASADA',
+        jugador: accion.jugador,
+        siguienteConstructor: siguiente,
+      },
+    ],
+  };
 }

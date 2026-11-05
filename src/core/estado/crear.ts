@@ -45,6 +45,8 @@ export function crearPartida(mesa: Mesa, ids: readonly JugadorId[]): Estado {
     pasoPreparacion: 0,
     pobladoPendiente: null,
     descartesPendientes: {},
+    tratos: [],
+    turnoEspecialDe: null,
     edificios: {},
     caminos: {},
     banco,

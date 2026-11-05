@@ -162,6 +162,60 @@ describe('evolucionar', () => {
     expect(nuevo).toMatchObject({ fase: 'FIN', ganador: j0 });
   });
 
+  describe('comercio entre jugadores y fase especial', () => {
+    const j1 = inicial.jugadores[1]!.id;
+    const trato = {
+      id: 'trato-xyz',
+      proponente: j0,
+      destinatario: null,
+      entrega: { MADERA: 1, LADRILLO: 0, OVEJA: 0, TRIGO: 0, MINERAL: 0 },
+      pide: { MADERA: 0, LADRILLO: 0, OVEJA: 1, TRIGO: 0, MINERAL: 0 },
+      rechazadoPor: [],
+    };
+
+    it('TRATO_PROPUESTO agrega el trato a la lista', () => {
+      const nuevo = evolucionarSinMutar(base, { tipo: 'TRATO_PROPUESTO', trato });
+      expect(nuevo.tratos).toHaveLength(1);
+      expect(nuevo.tratos[0]?.id).toBe('trato-xyz');
+    });
+
+    it('TRATO_ACEPTADO intercambia cartas y elimina el trato', () => {
+      const conTrato = conCambios(base, { tratos: [trato] });
+      const nuevo = evolucionarSinMutar(conTrato, {
+        tipo: 'TRATO_ACEPTADO',
+        tratoId: trato.id,
+        proponente: j0,
+        aceptante: j1,
+        entrega: trato.entrega,
+        pide: trato.pide,
+      });
+      expect(nuevo.tratos).toHaveLength(0);
+      const prop = nuevo.jugadores.find((j) => j.id === j0)!;
+      const acept = nuevo.jugadores.find((j) => j.id === j1)!;
+      expect(prop.recursos.MADERA).toBe(4);
+      expect(prop.recursos.OVEJA).toBe(6);
+      expect(acept.recursos.MADERA).toBe(6);
+      expect(acept.recursos.OVEJA).toBe(4);
+    });
+
+    it('FASE_ESPECIAL_INICIADA y CONSTRUCCION_ESPECIAL_PASADA', () => {
+      const estadoEsp = evolucionarSinMutar(base, {
+        tipo: 'FASE_ESPECIAL_INICIADA',
+        turnoOriginal: 0,
+        primerConstructor: 1,
+      });
+      expect(estadoEsp.fase).toBe('CONSTRUCCION_ESPECIAL');
+      expect(estadoEsp.turnoEspecialDe).toBe(1);
+
+      const estadoPasado = evolucionarSinMutar(estadoEsp, {
+        tipo: 'CONSTRUCCION_ESPECIAL_PASADA',
+        jugador: j1,
+        siguienteConstructor: 2,
+      });
+      expect(estadoPasado.turnoEspecialDe).toBe(2);
+    });
+  });
+
   it('un jugador inexistente lanza un error claro', () => {
     expect(() =>
       evolucionar(base, { tipo: 'DADOS_TIRADOS', jugador: 'nadie', dados: [1, 1] }),

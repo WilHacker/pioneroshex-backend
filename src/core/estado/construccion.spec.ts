@@ -451,4 +451,16 @@ describe('victoria', () => {
     if (!r.ok) throw new Error(r.motivo);
     expect(r.eventos.map((e) => e.tipo)).toEqual(['CAMINO_COLOCADO']);
   });
+
+  it('permite construir en CONSTRUCCION_ESPECIAL al jugador en turnoEspecialDe', () => {
+    const estadoEspecial = conCambios(listo, {
+      fase: 'CONSTRUCCION_ESPECIAL',
+      turnoDe: 1,
+      turnoEspecialDe: 0,
+    });
+    const r = decidir(mesa, estadoEspecial, camino(aristaN0X));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.eventos[0]?.tipo).toBe('CAMINO_COLOCADO');
+  });
 });

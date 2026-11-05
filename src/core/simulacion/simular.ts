@@ -72,7 +72,9 @@ export function simularPartida(
     const jugador =
       estado.fase === 'DESCARTE'
         ? (Object.keys(estado.descartesPendientes)[0] ?? estado.jugadores[estado.turnoDe]!.id)
-        : estado.jugadores[estado.turnoDe]!.id;
+        : estado.fase === 'CONSTRUCCION_ESPECIAL' && estado.turnoEspecialDe !== null
+          ? estado.jugadores[estado.turnoEspecialDe]!.id
+          : estado.jugadores[estado.turnoDe]!.id;
     const accion = elegirAccion(enumerarAcciones(mesa, estado, jugador), rng);
     estado = aplicarOLanzar(mesa, estado, accion);
     acciones.push(accion);

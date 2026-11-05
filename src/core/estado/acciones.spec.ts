@@ -22,6 +22,12 @@ const TIPOS: readonly Accion['tipo'][] = [
   'CONSTRUIR_POBLADO',
   'CONSTRUIR_CIUDAD',
   'CAMBIAR_CON_BANCA',
+  'PROPONER_TRATO',
+  'ACEPTAR_TRATO',
+  'RECHAZAR_TRATO',
+  'CANCELAR_TRATO',
+  'CONTRAOFERTAR_TRATO',
+  'PASAR_CONSTRUCCION_ESPECIAL',
   'TERMINAR_TURNO',
 ];
 const SOBRADO: Record<Recurso, number> = { MADERA: 9, LADRILLO: 9, OVEJA: 9, TRIGO: 9, MINERAL: 9 };
@@ -58,6 +64,25 @@ function todasLasCandidatas(mesa: Mesa, jugador: JugadorId): Accion[] {
         recibe,
       })),
     ),
+    ...RECURSOS.flatMap((entrega) =>
+      RECURSOS.filter((pide) => pide !== entrega).map((pide): Accion => ({
+        tipo: 'PROPONER_TRATO',
+        jugador,
+        entrega: { [entrega]: 1 },
+        pide: { [pide]: 1 },
+      })),
+    ),
+    { tipo: 'ACEPTAR_TRATO', jugador, tratoId: 't1' },
+    { tipo: 'RECHAZAR_TRATO', jugador, tratoId: 't1' },
+    { tipo: 'CANCELAR_TRATO', jugador, tratoId: 't1' },
+    {
+      tipo: 'CONTRAOFERTAR_TRATO',
+      jugador,
+      tratoIdOriginal: 't1',
+      entrega: { OVEJA: 1 },
+      pide: { MADERA: 1 },
+    },
+    { tipo: 'PASAR_CONSTRUCCION_ESPECIAL', jugador },
     { tipo: 'TERMINAR_TURNO', jugador },
   ];
 }
@@ -88,12 +113,17 @@ function comprobarEstado(mesa: Mesa, estado: Estado): readonly Accion[] {
       .filter((a) => aplicar(mesa, estado, a).ok !== claves.has(claveDe(a)))
       .map(claveDe);
     expect(desacuerdos).toEqual([]);
-    if (estado.fase !== 'DESCARTE' && id !== enTurno(estado)) expect(enumeradas).toEqual([]);
+    const fueraDeTurnoSinAccion =
+      estado.fase !== 'DESCARTE' &&
+      estado.fase !== 'CONSTRUCCION_ESPECIAL' &&
+      estado.tratos.length === 0 &&
+      id !== enTurno(estado);
+    if (fueraDeTurnoSinAccion) expect(enumeradas).toEqual([]);
     const disponibles = accionesDisponibles(mesa, estado, id);
     expect(disponibles.map((d) => d.tipo)).toEqual(TIPOS);
     for (const d of disponibles) {
       expect(d.disponible).toBe(enumeradas.some((a) => a.tipo === d.tipo));
-      if (estado.fase !== 'DESCARTE' && id !== enTurno(estado)) {
+      if (fueraDeTurnoSinAccion) {
         expect(d.motivo).toBe('NO_ES_TU_TURNO');
       }
     }
@@ -259,6 +289,12 @@ describe('accionesDisponibles: ayuda por tipo', () => {
       CONSTRUIR_POBLADO: 'RECURSOS_INSUFICIENTES',
       CONSTRUIR_CIUDAD: 'RECURSOS_INSUFICIENTES',
       CAMBIAR_CON_BANCA: 'RECURSOS_INSUFICIENTES',
+      PROPONER_TRATO: 'RECURSOS_INSUFICIENTES',
+      ACEPTAR_TRATO: 'TRATO_INEXISTENTE',
+      RECHAZAR_TRATO: 'TRATO_INEXISTENTE',
+      CANCELAR_TRATO: 'TRATO_INEXISTENTE',
+      CONTRAOFERTAR_TRATO: 'TRATO_INEXISTENTE',
+      PASAR_CONSTRUCCION_ESPECIAL: 'FASE_INCORRECTA',
       TERMINAR_TURNO: 'OK',
     });
   });

@@ -22,6 +22,8 @@ export interface Vista {
   readonly fase: Fase;
   /** Id del jugador en turno; `null` con la partida terminada (fase FIN), ya no hay turno. */
   readonly turnoDe: JugadorId | null;
+  readonly turnoEspecialDe: JugadorId | null;
+  readonly tratos: Estado['tratos'];
   readonly edificios: Estado['edificios'];
   readonly caminos: Estado['caminos'];
   readonly banco: Estado['banco'];
@@ -54,6 +56,16 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
     jugadores,
     fase: estado.fase,
     turnoDe: estado.fase === 'FIN' ? null : (estado.jugadores[estado.turnoDe]?.id ?? null),
+    turnoEspecialDe:
+      estado.turnoEspecialDe !== null
+        ? (estado.jugadores[estado.turnoEspecialDe]?.id ?? null)
+        : null,
+    tratos: estado.tratos.map((t) => ({
+      ...t,
+      entrega: { ...t.entrega },
+      pide: { ...t.pide },
+      rechazadoPor: [...t.rechazadoPor],
+    })),
     edificios: Object.fromEntries(Object.entries(estado.edificios).map(([v, e]) => [v, { ...e }])),
     caminos: { ...estado.caminos },
     banco: { ...estado.banco },

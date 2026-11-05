@@ -61,6 +61,24 @@ describe('simularPartida', () => {
     comprobarFinal(config, estado);
   });
 
+  it(
+    'simula una partida en Modo B con 5 jugadores y fase especial de construcción',
+    { timeout: 15000 },
+    () => {
+      const config = crearGameConfig({
+        semilla: 'seis-0',
+        jugadores: 5,
+        turnRuleMode: 'B',
+        puntosVictoria: PUNTOS,
+      });
+      const { estado } = simularPartida(config, idsDe(5), {
+        semillaBot: 'bot-modo-b',
+        maxTurnos: MAX_TURNOS,
+      });
+      comprobarFinal(config, estado);
+    },
+  );
+
   it('turnos = tiradas: maxTurnos igual a los turnos jugados no lanza, uno menos sí', () => {
     const { turnos, estado } = simular3('sim-0');
     expect(turnos).toBe(estado.tiradas);

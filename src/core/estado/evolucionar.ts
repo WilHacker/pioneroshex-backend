@@ -1,6 +1,6 @@
 import { produce, type Draft } from 'immer';
 import type { Costo } from '../reglas/costos.js';
-import type { Recurso } from '../reglas/recursos.js';
+import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import type { Estado, Evento, Jugador, JugadorId } from './tipos.js';
 
 function jugadorDe(estado: Draft<Estado>, id: JugadorId): Draft<Jugador> {
@@ -78,6 +78,64 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
       estado.banco[evento.recibe] -= evento.cantidadRecibida;
       return;
     }
+    case 'TRATO_PROPUESTO':
+      estado.tratos.push({
+        ...evento.trato,
+        entrega: { ...evento.trato.entrega },
+        pide: { ...evento.trato.pide },
+        rechazadoPor: [...evento.trato.rechazadoPor],
+      });
+      return;
+    case 'TRATO_ACEPTADO': {
+      const proponente = jugadorDe(estado, evento.proponente);
+      const aceptante = jugadorDe(estado, evento.aceptante);
+      for (const r of RECURSOS) {
+        proponente.recursos[r] -= evento.entrega[r];
+        aceptante.recursos[r] += evento.entrega[r];
+        aceptante.recursos[r] -= evento.pide[r];
+        proponente.recursos[r] += evento.pide[r];
+      }
+      estado.tratos = estado.tratos.filter((t) => t.id !== evento.tratoId);
+      // Elimina tratos del proponente o aceptante que ya no puedan cumplirse
+      estado.tratos = estado.tratos.filter((t) => {
+        const p = estado.jugadores.find((j) => j.id === t.proponente);
+        if (!p) return false;
+        return RECURSOS.every((r) => p.recursos[r] >= t.entrega[r]);
+      });
+      return;
+    }
+    case 'TRATO_RECHAZADO': {
+      const trato = estado.tratos.find((t) => t.id === evento.tratoId);
+      if (trato) {
+        if (trato.destinatario !== null) {
+          estado.tratos = estado.tratos.filter((t) => t.id !== evento.tratoId);
+        } else {
+          const actualizados = [...trato.rechazadoPor, evento.jugador];
+          const rivales = estado.jugadores.filter((j) => j.id !== trato.proponente);
+          if (actualizados.length >= rivales.length) {
+            estado.tratos = estado.tratos.filter((t) => t.id !== evento.tratoId);
+          } else {
+            trato.rechazadoPor = actualizados;
+          }
+        }
+      }
+      return;
+    }
+    case 'TRATO_CANCELADO':
+      estado.tratos = estado.tratos.filter((t) => t.id !== evento.tratoId);
+      return;
+    case 'FASE_ESPECIAL_INICIADA':
+      estado.fase = 'CONSTRUCCION_ESPECIAL';
+      estado.turnoEspecialDe = evento.primerConstructor;
+      estado.tratos = [];
+      return;
+    case 'CONSTRUCCION_ESPECIAL_PASADA':
+      if (evento.siguienteConstructor !== null) {
+        estado.turnoEspecialDe = evento.siguienteConstructor;
+      } else {
+        estado.turnoEspecialDe = null;
+      }
+      return;
     case 'PRODUCCION_BLOQUEADA':
       return;
     case 'FASE_CAMBIADA':
@@ -90,6 +148,8 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
       estado.turnoDe = evento.siguiente;
       estado.fase = 'PRE_TIRADA';
       estado.dados = null;
+      estado.turnoEspecialDe = null;
+      estado.tratos = [];
       return;
     case 'PARTIDA_GANADA':
       jugadorDe(estado, evento.jugador);

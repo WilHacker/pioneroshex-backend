@@ -92,7 +92,10 @@ function victoria(estado: Estado, accion: AccionConstruir): Evento[] {
 
 /** Construye un camino, un poblado o una ciudad pagando su costo (ver el orden arriba). */
 export function decidirConstruccion(mesa: Mesa, estado: Estado, accion: Accion): Decision {
-  if (!esConstruccion(accion) || estado.fase !== 'FASE_PRINCIPAL') {
+  if (
+    !esConstruccion(accion) ||
+    (estado.fase !== 'FASE_PRINCIPAL' && estado.fase !== 'CONSTRUCCION_ESPECIAL')
+  ) {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
   }
   const jugador = estado.jugadores.find((j) => j.id === accion.jugador);

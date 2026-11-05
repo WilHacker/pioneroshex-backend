@@ -1,0 +1,276 @@
+import { RECURSOS, type Recurso } from '../reglas/recursos.js';
+import type { Accion, Decision, Estado, Trato } from './tipos.js';
+
+function normalizar(parcial: Partial<Record<Recurso, number>>): Record<Recurso, number> {
+  const res: Record<Recurso, number> = {
+    MADERA: 0,
+    LADRILLO: 0,
+    OVEJA: 0,
+    TRIGO: 0,
+    MINERAL: 0,
+  };
+  for (const r of RECURSOS) {
+    const val = parcial[r];
+    if (typeof val === 'number' && Number.isInteger(val) && val > 0) {
+      res[r] = val;
+    }
+  }
+  return res;
+}
+
+function total(r: Record<Recurso, number>): number {
+  return RECURSOS.reduce((acc, k) => acc + r[k], 0);
+}
+
+function tieneRecursos(
+  jugadorRecursos: Record<Recurso, number>,
+  requerido: Record<Recurso, number>,
+): boolean {
+  for (const r of RECURSOS) {
+    if (jugadorRecursos[r] < requerido[r]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function decidirProponerTrato(estado: Estado, accion: Accion): Decision {
+  if (accion.tipo !== 'PROPONER_TRATO') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+  if (estado.fase !== 'FASE_PRINCIPAL') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+
+  const proponente = estado.jugadores.find((j) => j.id === accion.jugador);
+  if (!proponente) {
+    return { ok: false, motivo: 'JUGADOR_DESCONOCIDO' };
+  }
+
+  const jugadorEnTurno = estado.jugadores[estado.turnoDe]?.id;
+  const esEnTurno = accion.jugador === jugadorEnTurno;
+  const destinatario = accion.destinatario ?? null;
+
+  if (destinatario !== null) {
+    const existeDestinatario = estado.jugadores.some((j) => j.id === destinatario);
+    if (!existeDestinatario || destinatario === accion.jugador) {
+      return { ok: false, motivo: 'DESTINATARIO_INVALIDO' };
+    }
+  }
+
+  // Solo el jugador en turno puede iniciar propuestas de trato
+  if (!esEnTurno) {
+    return { ok: false, motivo: 'NO_ES_TU_TURNO' };
+  }
+
+  const entrega = normalizar(accion.entrega);
+  const pide = normalizar(accion.pide);
+
+  if (total(entrega) === 0) {
+    return { ok: false, motivo: 'OFERTA_VACIA' };
+  }
+  if (total(pide) === 0) {
+    return { ok: false, motivo: 'PETICION_VACIA' };
+  }
+
+  // No solapamiento: no se puede dar y pedir el mismo recurso
+  for (const r of RECURSOS) {
+    if (entrega[r] > 0 && pide[r] > 0) {
+      return { ok: false, motivo: 'INTERCAMBIO_SOLAPADO' };
+    }
+  }
+
+  if (!tieneRecursos(proponente.recursos, entrega)) {
+    return { ok: false, motivo: 'RECURSOS_INSUFICIENTES' };
+  }
+
+  const id = `trato:${accion.jugador}:${estado.tratos.length + 1}:${estado.version}`;
+  const trato: Trato = {
+    id,
+    proponente: accion.jugador,
+    destinatario,
+    entrega,
+    pide,
+    rechazadoPor: [],
+  };
+
+  return {
+    ok: true,
+    eventos: [{ tipo: 'TRATO_PROPUESTO', trato }],
+  };
+}
+
+export function decidirAceptarTrato(estado: Estado, accion: Accion): Decision {
+  if (accion.tipo !== 'ACEPTAR_TRATO') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+  if (estado.fase !== 'FASE_PRINCIPAL') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+
+  const trato = estado.tratos.find((t) => t.id === accion.tratoId);
+  if (!trato) {
+    return { ok: false, motivo: 'TRATO_INEXISTENTE' };
+  }
+
+  if (accion.jugador === trato.proponente) {
+    return { ok: false, motivo: 'TRATO_NO_DIRIGIDO_A_TI' };
+  }
+
+  if (trato.destinatario !== null && trato.destinatario !== accion.jugador) {
+    return { ok: false, motivo: 'TRATO_NO_DIRIGIDO_A_TI' };
+  }
+
+  const aceptante = estado.jugadores.find((j) => j.id === accion.jugador);
+  const proponente = estado.jugadores.find((j) => j.id === trato.proponente);
+  if (!aceptante || !proponente) {
+    return { ok: false, motivo: 'JUGADOR_DESCONOCIDO' };
+  }
+
+  if (!tieneRecursos(aceptante.recursos, trato.pide)) {
+    return { ok: false, motivo: 'RECURSOS_INSUFICIENTES' };
+  }
+
+  if (!tieneRecursos(proponente.recursos, trato.entrega)) {
+    return { ok: false, motivo: 'RECURSOS_INSUFICIENTES' };
+  }
+
+  return {
+    ok: true,
+    eventos: [
+      {
+        tipo: 'TRATO_ACEPTADO',
+        tratoId: trato.id,
+        proponente: trato.proponente,
+        aceptante: accion.jugador,
+        entrega: trato.entrega,
+        pide: trato.pide,
+      },
+    ],
+  };
+}
+
+export function decidirRechazarTrato(estado: Estado, accion: Accion): Decision {
+  if (accion.tipo !== 'RECHAZAR_TRATO') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+  if (estado.fase !== 'FASE_PRINCIPAL') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+
+  const trato = estado.tratos.find((t) => t.id === accion.tratoId);
+  if (!trato) {
+    return { ok: false, motivo: 'TRATO_INEXISTENTE' };
+  }
+
+  if (accion.jugador === trato.proponente) {
+    return { ok: false, motivo: 'TRATO_NO_DIRIGIDO_A_TI' };
+  }
+
+  if (trato.destinatario !== null && trato.destinatario !== accion.jugador) {
+    return { ok: false, motivo: 'TRATO_NO_DIRIGIDO_A_TI' };
+  }
+
+  if (trato.rechazadoPor.includes(accion.jugador)) {
+    return { ok: false, motivo: 'YA_RECHAZADO' };
+  }
+
+  return {
+    ok: true,
+    eventos: [
+      {
+        tipo: 'TRATO_RECHAZADO',
+        tratoId: trato.id,
+        jugador: accion.jugador,
+      },
+    ],
+  };
+}
+
+export function decidirCancelarTrato(estado: Estado, accion: Accion): Decision {
+  if (accion.tipo !== 'CANCELAR_TRATO') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+  if (estado.fase !== 'FASE_PRINCIPAL') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+
+  const trato = estado.tratos.find((t) => t.id === accion.tratoId);
+  if (!trato) {
+    return { ok: false, motivo: 'TRATO_INEXISTENTE' };
+  }
+
+  if (accion.jugador !== trato.proponente) {
+    return { ok: false, motivo: 'NO_ES_TU_TRATO' };
+  }
+
+  return {
+    ok: true,
+    eventos: [
+      {
+        tipo: 'TRATO_CANCELADO',
+        tratoId: trato.id,
+        motivo: 'MANUAL',
+      },
+    ],
+  };
+}
+
+export function decidirContraofertarTrato(estado: Estado, accion: Accion): Decision {
+  if (accion.tipo !== 'CONTRAOFERTAR_TRATO') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+  if (estado.fase !== 'FASE_PRINCIPAL') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+
+  const tratoOriginal = estado.tratos.find((t) => t.id === accion.tratoIdOriginal);
+  if (!tratoOriginal) {
+    return { ok: false, motivo: 'TRATO_INEXISTENTE' };
+  }
+
+  if (accion.jugador === tratoOriginal.proponente) {
+    return { ok: false, motivo: 'DESTINATARIO_INVALIDO' };
+  }
+
+  const proponente = estado.jugadores.find((j) => j.id === accion.jugador);
+  if (!proponente) {
+    return { ok: false, motivo: 'JUGADOR_DESCONOCIDO' };
+  }
+
+  const entrega = normalizar(accion.entrega);
+  const pide = normalizar(accion.pide);
+
+  if (total(entrega) === 0) {
+    return { ok: false, motivo: 'OFERTA_VACIA' };
+  }
+  if (total(pide) === 0) {
+    return { ok: false, motivo: 'PETICION_VACIA' };
+  }
+
+  for (const r of RECURSOS) {
+    if (entrega[r] > 0 && pide[r] > 0) {
+      return { ok: false, motivo: 'INTERCAMBIO_SOLAPADO' };
+    }
+  }
+
+  if (!tieneRecursos(proponente.recursos, entrega)) {
+    return { ok: false, motivo: 'RECURSOS_INSUFICIENTES' };
+  }
+
+  const id = `trato:${accion.jugador}:${estado.tratos.length + 1}:${estado.version}`;
+  const trato: Trato = {
+    id,
+    proponente: accion.jugador,
+    destinatario: tratoOriginal.proponente,
+    entrega,
+    pide,
+    rechazadoPor: [],
+    contraofertaDe: tratoOriginal.id,
+  };
+
+  return {
+    ok: true,
+    eventos: [{ tipo: 'TRATO_PROPUESTO', trato }],
+  };
+}

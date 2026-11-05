@@ -3,7 +3,7 @@ import { crearRng, mezclar } from '../reglas/azar.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import type { Mesa } from './mesa.js';
 import type { Accion, Decision, Estado, Evento, JugadorId } from './tipos.js';
-import { decidirFinDeTurno, decidirTirada } from './turno.js';
+import { decidirFinDeTurno, decidirPasarConstruccionEspecial, decidirTirada } from './turno.js';
 
 export function decidirLadrón(mesa: Mesa, estado: Estado, accion: Accion): Decision {
   if (accion.tipo !== 'MOVER_LADRON') return { ok: false, motivo: 'FASE_INCORRECTA' };
@@ -126,6 +126,13 @@ export function decidirSaltoInactividad(mesa: Mesa, estado: Estado, accion: Acci
 
   if (estado.fase === 'FASE_PRINCIPAL') {
     return decidirFinDeTurno(mesa, estado, { tipo: 'TERMINAR_TURNO', jugador: accion.jugador });
+  }
+
+  if (estado.fase === 'CONSTRUCCION_ESPECIAL') {
+    return decidirPasarConstruccionEspecial(mesa, estado, {
+      tipo: 'PASAR_CONSTRUCCION_ESPECIAL',
+      jugador: accion.jugador,
+    });
   }
 
   return { ok: false, motivo: 'FASE_INCORRECTA' };
