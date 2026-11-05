@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { accionesDisponibles, type AccionDisponible } from '../../core/estado/acciones.js';
 import type { Mesa } from '../../core/estado/mesa.js';
 import { mesaPublica, type MesaPublica } from '../../core/estado/mesa-publica.js';
 import {
@@ -12,6 +13,13 @@ import { vistaPara, type Vista } from '../../core/estado/vista.js';
 
 /** Recibe lo que ve un observador tras cada jugada aceptada. */
 export type Escucha = (notificacion: Notificacion) => void;
+
+export interface OpcionesActor extends OpcionesPaso {
+  /** Se llama con el estado nuevo tras cada jugada aceptada (p. ej. para guardarlo). */
+  readonly alCambiar?: (estado: Estado) => void | Promise<void>;
+  /** Reloj en milisegundos; se inyecta solo para probar. */
+  readonly ahora?: () => number;
+}
 
 export type ResultadoEnvio =
   | {
@@ -34,6 +42,7 @@ export class PartidaActor {
   private readonly logger = new Logger(PartidaActor.name);
   private readonly escuchas = new Map<Observador, Set<{ readonly escucha: Escucha }>>();
   private actual: Estado;
+  private ultimaActividadMs: number;
   private cola: Promise<unknown> = Promise.resolve();
   /** El tablero no cambia con las jugadas: se calcula una vez. */
   readonly mesaPublica: MesaPublica;
@@ -41,14 +50,31 @@ export class PartidaActor {
   constructor(
     private readonly mesa: Mesa,
     estadoInicial: Estado,
-    private readonly opciones: OpcionesPaso = {},
+    private readonly opciones: OpcionesActor = {},
   ) {
     this.actual = estadoInicial;
+    this.ultimaActividadMs = this.ahora();
     this.mesaPublica = mesaPublica(mesa);
   }
 
   get estado(): Estado {
     return this.actual;
+  }
+
+  /** Última jugada aceptada, conexión o desconexión, en ms. Sirve para expirar partidas muertas. */
+  get ultimaActividad(): number {
+    return this.ultimaActividadMs;
+  }
+
+  /** Cuántas escuchas hay activas (sockets conectados). */
+  get suscriptores(): number {
+    let total = 0;
+    for (const conjunto of this.escuchas.values()) total += conjunto.size;
+    return total;
+  }
+
+  private ahora(): number {
+    return (this.opciones.ahora ?? Date.now)();
   }
 
   /** Encola la acción; la promesa se resuelve cuando le toca y se ha procesado. */
@@ -64,6 +90,14 @@ export class PartidaActor {
     return vistaPara(this.actual, observador);
   }
 
+  /** Qué puede hacer `jugador` ahora (para pintar los botones). Vacío si la partida terminó. */
+  acciones(jugador: Accion['jugador']): readonly AccionDisponible[] {
+    if (!this.actual.jugadores.some((j) => j.id === jugador)) {
+      throw new Error(`El jugador "${jugador}" no participa en la partida`);
+    }
+    return this.actual.fase === 'FIN' ? [] : accionesDisponibles(this.mesa, this.actual, jugador);
+  }
+
   /** Empieza a recibir notificaciones como `observador`. Devuelve la función para darse de baja. */
   suscribir(observador: Observador, escucha: Escucha): () => void {
     if (observador !== null && !this.actual.jugadores.some((j) => j.id === observador)) {
@@ -73,7 +107,9 @@ export class PartidaActor {
     const conjunto = this.escuchas.get(observador) ?? new Set();
     conjunto.add(entrada);
     this.escuchas.set(observador, conjunto);
+    this.ultimaActividadMs = this.ahora();
     return () => {
+      this.ultimaActividadMs = this.ahora();
       const actuales = this.escuchas.get(observador);
       if (!actuales) return;
       actuales.delete(entrada);
@@ -91,12 +127,31 @@ export class PartidaActor {
     );
     if (!resultado.ok) return resultado;
     this.actual = resultado.estado;
+    this.ultimaActividadMs = this.ahora();
+    this.persistir(resultado.estado);
     for (const notificacion of resultado.notificaciones) {
       // Copia a propósito: un suscriptor puede darse de baja mientras se avisa.
       const destinatarios = [...(this.escuchas.get(notificacion.observador) ?? [])];
       for (const { escucha } of destinatarios) this.avisar(escucha, notificacion);
     }
     return { ok: true, estado: resultado.estado, eventosCompletos: resultado.eventosCompletos };
+  }
+
+  /** Un fallo al guardar se registra: la jugada ya es válida y los demás deben enterarse. */
+  private persistir(estado: Estado): void {
+    const fallo = (error: unknown): void => {
+      const mensaje = error instanceof Error ? error.message || error.name : String(error);
+      this.logger.error(
+        `No se pudo guardar la partida: ${mensaje}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    };
+    try {
+      const pendiente = this.opciones.alCambiar?.(estado);
+      if (pendiente instanceof Promise) pendiente.catch(fallo);
+    } catch (error: unknown) {
+      fallo(error);
+    }
   }
 
   /** Un suscriptor roto (p. ej. un socket caído) no debe frenar a los demás ni deshacer la jugada. */

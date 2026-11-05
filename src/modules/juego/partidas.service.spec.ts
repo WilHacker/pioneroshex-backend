@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { crearMesa } from '../../core/estado/mesa.js';
 import { crearIdDeSala, LimiteDePartidasError, PartidasService } from './partidas.service.js';
 
 const IDS = ['ana', 'beto', 'caro'];
@@ -77,5 +78,51 @@ describe('PartidasService', () => {
     expect(servicio.cantidad).toBe(2);
     servicio.eliminar(id);
     expect(() => servicio.crear(IDS)).not.toThrow();
+  });
+});
+
+describe('PartidasService: expiración y restauración', () => {
+  it('barrer elimina las partidas inactivas sin nadie conectado y devuelve sus ids', () => {
+    let ahora = 0;
+    const servicio = new PartidasService(10);
+    const vieja = servicio.crear(IDS, {}, () => ({ ahora: () => ahora }));
+    ahora = 5000;
+    const reciente = servicio.crear(IDS, {}, () => ({ ahora: () => ahora }));
+    const quitadas = servicio.barrer(3000, ahora);
+    expect(quitadas).toEqual([vieja.id]);
+    expect(servicio.obtener(vieja.id)).toBeUndefined();
+    expect(servicio.obtener(reciente.id)).toBe(reciente.actor);
+  });
+
+  it('barrer respeta las partidas con alguien conectado', () => {
+    const servicio = new PartidasService(10);
+    const { id, actor } = servicio.crear(IDS, {}, () => ({ ahora: () => 0 }));
+    const baja = actor.suscribir('ana', () => undefined);
+    expect(servicio.barrer(1, 1_000_000)).toEqual([]);
+    baja();
+    expect(servicio.barrer(1, 1_000_000)).toEqual([id]);
+  });
+
+  it('crear entrega el id a la fábrica de opciones del actor', () => {
+    const servicio = new PartidasService();
+    let visto = '';
+    const { id } = servicio.crear(IDS, {}, (idNuevo) => {
+      visto = idNuevo;
+      return {};
+    });
+    expect(visto).toBe(id);
+  });
+
+  it('restaurar registra un actor con un id y un estado dados, respetando el tope', () => {
+    const origen = new PartidasService().crear(IDS);
+    const mesa = crearMesa(origen.actor.estado.config);
+    const servicio = new PartidasService(1);
+    const actor = servicio.restaurar('abcd1234', mesa, origen.actor.estado);
+    expect(servicio.obtener('abcd1234')).toBe(actor);
+    expect(actor.estado).toBe(origen.actor.estado);
+    expect(() => servicio.restaurar('otro0000', mesa, origen.actor.estado)).toThrow(
+      LimiteDePartidasError,
+    );
+    expect(() => servicio.restaurar('abcd1234', mesa, origen.actor.estado)).toThrow(/ya existe/);
   });
 });

@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { PartidaActor } from './partida-actor.js';
+import type { Mesa } from '../../core/estado/mesa.js';
+import type { Estado } from '../../core/estado/tipos.js';
+import { PartidaActor, type OpcionesActor } from './partida-actor.js';
 import { crearPartidaNueva, type OpcionesPartida } from './partida-nueva.js';
 
 /** Tope provisional de partidas vivas en memoria; ajustar al medir (ver Backlog). */
@@ -46,17 +48,55 @@ export class PartidasService {
     return this.partidas.size;
   }
 
-  /** Crea una partida con su actor. Lanza si el motor la rechaza o si se llegó al tope. */
+  /**
+   * Crea una partida con su actor. Lanza si el motor la rechaza o si se llegó al tope.
+   * `opcionesActor` recibe el id nuevo (para que quien guarde sepa dónde); siempre se piden las
+   * acciones disponibles porque el cliente las usa para saber qué botones mostrar.
+   */
   crear(
     jugadores: readonly string[],
     opciones: OpcionesPartida = {},
+    opcionesActor: (id: string) => OpcionesActor = () => ({}),
   ): { readonly id: string; readonly actor: PartidaActor } {
-    if (this.partidas.size >= this.limite) throw new LimiteDePartidasError(this.limite);
+    this.comprobarTope();
     const { mesa, estado } = crearPartidaNueva(jugadores, opciones);
     const id = crearIdDeSala((candidato) => this.partidas.has(candidato));
-    const actor = new PartidaActor(mesa, estado);
+    const actor = new PartidaActor(mesa, estado, { incluirAcciones: true, ...opcionesActor(id) });
     this.partidas.set(id, actor);
     return { id, actor };
+  }
+
+  /** Vuelve a registrar una partida guardada (al arrancar el servidor). */
+  restaurar(
+    id: string,
+    mesa: Mesa,
+    estado: Estado,
+    opcionesActor: OpcionesActor = {},
+  ): PartidaActor {
+    if (this.partidas.has(id)) throw new Error(`La partida "${id}" ya existe`);
+    this.comprobarTope();
+    const actor = new PartidaActor(mesa, estado, { incluirAcciones: true, ...opcionesActor });
+    this.partidas.set(id, actor);
+    return actor;
+  }
+
+  /**
+   * Quita las partidas sin nadie conectado y sin jugadas desde hace más de `maxInactivoMs`.
+   * Devuelve los ids quitados para que quien las guardó pueda borrarlas también.
+   */
+  barrer(maxInactivoMs: number, ahora: number = Date.now()): string[] {
+    const quitadas: string[] = [];
+    for (const [id, actor] of this.partidas) {
+      if (actor.suscriptores === 0 && ahora - actor.ultimaActividad > maxInactivoMs) {
+        this.partidas.delete(id);
+        quitadas.push(id);
+      }
+    }
+    return quitadas;
+  }
+
+  private comprobarTope(): void {
+    if (this.partidas.size >= this.limite) throw new LimiteDePartidasError(this.limite);
   }
 
   obtener(id: string): PartidaActor | undefined {

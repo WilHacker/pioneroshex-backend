@@ -11,3 +11,17 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+/// Una sala de espera y, si ya empezó, la instantánea de su partida.
+/// `jugadores` guarda el hash del token de cada uno, nunca el token. `estado` es el `Estado` del
+/// motor en JSON (incluye la semilla secreta del azar: solo se lee en el servidor).
+model Sala {
+  id            String   @id
+  anfitrion     String
+  jugadores     Json
+  partidaId     String?
+  estado        Json?
+  actualizadaEn DateTime
+
+  @@map("salas")
+}

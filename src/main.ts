@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
+import { AdaptadorSocketIo } from './infra/socket/socket-io.adapter.js';
 import type { Env } from './config/env.schema.js';
 
 async function arrancar(): Promise<void> {
@@ -10,7 +11,9 @@ async function arrancar(): Promise<void> {
   const config = app.get<ConfigService<Env, true>>(ConfigService);
 
   app.use(helmet());
-  app.enableCors({ origin: config.get('FRONTEND_URL', { infer: true }), credentials: true });
+  const origen = config.get('FRONTEND_URL', { infer: true });
+  app.enableCors({ origin: origen, credentials: true });
+  app.useWebSocketAdapter(new AdaptadorSocketIo(app, origen));
   app.enableShutdownHooks();
 
   const puerto = config.get('PORT', { infer: true });

@@ -172,3 +172,78 @@ describe('PartidaActor: vista de quien entra o se reconecta', () => {
     expect(actor.mesaPublica).toBe(antes);
   });
 });
+
+describe('PartidaActor: actividad y persistencia', () => {
+  it('guarda la hora de la última jugada aceptada y no la de una rechazada', async () => {
+    let ahora = 1000;
+    const actor = new PartidaActor(mesa, preTirada, { ahora: () => ahora });
+    expect(actor.ultimaActividad).toBe(1000);
+    ahora = 2000;
+    await actor.enviar({ tipo: 'TIRAR_DADOS', jugador: b });
+    expect(actor.ultimaActividad).toBe(1000);
+    await actor.enviar(tirar);
+    expect(actor.ultimaActividad).toBe(2000);
+  });
+
+  it('cuenta los suscriptores y refresca la actividad al conectarse y al irse', () => {
+    let ahora = 1000;
+    const actor = new PartidaActor(mesa, preTirada, { ahora: () => ahora });
+    ahora = 3000;
+    const baja = actor.suscribir(a, () => undefined);
+    expect(actor.suscriptores).toBe(1);
+    expect(actor.ultimaActividad).toBe(3000);
+    ahora = 4000;
+    baja();
+    expect(actor.suscriptores).toBe(0);
+    expect(actor.ultimaActividad).toBe(4000);
+  });
+
+  it('avisa con el estado nuevo tras cada jugada aceptada, y solo entonces', async () => {
+    const alCambiar = vi.fn();
+    const actor = new PartidaActor(mesa, preTirada, { alCambiar });
+    await actor.enviar({ tipo: 'TIRAR_DADOS', jugador: b });
+    expect(alCambiar).not.toHaveBeenCalled();
+    await actor.enviar(tirar);
+    expect(alCambiar).toHaveBeenCalledExactlyOnceWith(actor.estado);
+  });
+
+  it('si alCambiar falla, lo registra y la jugada sigue siendo válida', async () => {
+    const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const actor = new PartidaActor(mesa, preTirada, {
+      alCambiar: () => {
+        throw new Error('disco lleno');
+      },
+    });
+    const r = await actor.enviar(tirar);
+    expect(r.ok).toBe(true);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('disco lleno'), expect.anything());
+  });
+
+  it('acepta también un alCambiar asíncrono que falla sin romper nada', async () => {
+    const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const actor = new PartidaActor(mesa, preTirada, {
+      alCambiar: () => Promise.reject(new Error('sin red')),
+    });
+    expect((await actor.enviar(tirar)).ok).toBe(true);
+    await new Promise((resolver) => setImmediate(resolver));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('sin red'), expect.anything());
+  });
+});
+
+describe('PartidaActor: acciones disponibles', () => {
+  it('da las acciones del jugador y marca TIRAR_DADOS como disponible en su turno', () => {
+    const actor = new PartidaActor(mesa, preTirada);
+    const acciones = actor.acciones(a);
+    expect(acciones.find((x) => x.tipo === 'TIRAR_DADOS')?.disponible).toBe(true);
+    expect(actor.acciones(b).find((x) => x.tipo === 'TIRAR_DADOS')?.disponible).toBe(false);
+  });
+
+  it('no da nada con la partida terminada', () => {
+    const fin = conCambios(preTirada, { fase: 'FIN', ganador: a });
+    expect(new PartidaActor(mesa, fin).acciones(a)).toEqual([]);
+  });
+
+  it('un jugador que no participa lanza un error', () => {
+    expect(() => new PartidaActor(mesa, preTirada).acciones('intruso')).toThrow(/no participa/);
+  });
+});
