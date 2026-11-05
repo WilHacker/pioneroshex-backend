@@ -24,7 +24,17 @@ export function puedeColocarPoblado(
   opciones: { requiereCamino: boolean },
 ): ResultadoRegla {
   const distancia = validarDistancia(mesa.mapa, new Set(Object.keys(estado.edificios)), vertice);
-  if (!distancia.ok) return distancia;
+  if (!distancia.ok) {
+    const culpable = distancia.detalle?.vecinoOcupado ?? vertice;
+    const dueno = estado.edificios[culpable]?.dueno;
+    return {
+      ok: false,
+      motivo: distancia.motivo,
+      ...(distancia.motivo === 'VERTICE_INEXISTENTE'
+        ? {}
+        : { detalle: { ...distancia.detalle, ...(dueno ? { dueno } : {}) } }),
+    };
+  }
   if (opciones.requiereCamino && !verticesConCaminoPropio(mesa, estado, jugador).has(vertice)) {
     return { ok: false, motivo: 'SIN_CONEXION' };
   }
@@ -43,15 +53,24 @@ export function puedeColocarCamino(
 ): ResultadoRegla {
   const datos = mesa.arista(arista);
   if (!datos) return { ok: false, motivo: 'ARISTA_INEXISTENTE' };
-  if (arista in estado.caminos) return { ok: false, motivo: 'ARISTA_OCUPADA' };
+  const duenoCamino = estado.caminos[arista];
+  if (duenoCamino !== undefined) {
+    return { ok: false, motivo: 'ARISTA_OCUPADA', detalle: { dueno: duenoCamino } };
+  }
 
   const propios = verticesConCaminoPropio(mesa, estado, jugador);
-  let cortado = false;
+  let corte: { vertice: string; dueno: string } | null = null;
   for (const v of datos.vertices) {
     const edificio = estado.edificios[v];
     if (edificio?.dueno === jugador) return { ok: true };
     if (!edificio && propios.has(v)) return { ok: true };
-    if (edificio && propios.has(v)) cortado = true;
+    if (edificio && propios.has(v)) corte ??= { vertice: v, dueno: edificio.dueno };
   }
-  return { ok: false, motivo: cortado ? 'CAMINO_CORTADO' : 'SIN_CONEXION' };
+  return corte
+    ? {
+        ok: false,
+        motivo: 'CAMINO_CORTADO',
+        detalle: { verticeCortado: corte.vertice, dueno: corte.dueno },
+      }
+    : { ok: false, motivo: 'SIN_CONEXION' };
 }

@@ -194,12 +194,20 @@ describe('preparación: rechazos', () => {
 
     it('vértice ocupado → VERTICE_OCUPADO', () => {
       const accion: Accion = { tipo: 'COLOCAR_POBLADO_INICIAL', jugador: otro, vertice: ocupado };
-      expect(decidir(mesa, siguiente, accion)).toEqual({ ok: false, motivo: 'VERTICE_OCUPADO' });
+      expect(decidir(mesa, siguiente, accion)).toEqual({
+        ok: false,
+        motivo: 'VERTICE_OCUPADO',
+        detalle: { dueno: siguiente.edificios[ocupado]?.dueno },
+      });
     });
 
     it('vértice vecino → DEMASIADO_CERCA', () => {
       const accion: Accion = { tipo: 'COLOCAR_POBLADO_INICIAL', jugador: otro, vertice: vecino };
-      expect(decidir(mesa, siguiente, accion)).toEqual({ ok: false, motivo: 'DEMASIADO_CERCA' });
+      expect(decidir(mesa, siguiente, accion)).toEqual({
+        ok: false,
+        motivo: 'DEMASIADO_CERCA',
+        detalle: { vecinoOcupado: ocupado, dueno: siguiente.edificios[ocupado]?.dueno },
+      });
     });
   });
 });

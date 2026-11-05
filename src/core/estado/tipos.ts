@@ -251,10 +251,20 @@ export type MotivoAccion =
   | 'CARTA_COMPRADA_ESTE_TURNO'
   | 'YA_JUGASTE_CARTA_ESTE_TURNO'
   | 'ARISTAS_INVALIDAS';
+/** Datos que explican un rechazo; todos opcionales, cada motivo rellena los suyos. */
+export interface DetalleRechazo {
+  /** Vecino con poblado o ciudad que impide construir (DEMASIADO_CERCA). */
+  readonly vecinoOcupado?: string;
+  /** Vértice con edificio rival que corta el camino (CAMINO_CORTADO). */
+  readonly verticeCortado?: string;
+  /** Jugador que ocupa el vértice, la arista o el edificio que estorba. */
+  readonly dueno?: JugadorId;
+}
 export interface Rechazo {
   readonly ok: false;
   readonly motivo: MotivoAccion;
   readonly falta?: Costo;
+  readonly detalle?: DetalleRechazo;
 }
 export type Decision = { readonly ok: true; readonly eventos: readonly Evento[] } | Rechazo;
 export type Resultado =

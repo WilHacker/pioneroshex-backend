@@ -35,6 +35,7 @@ describe('validarDistancia', () => {
       expect(validarDistancia(mapa, new Set([centro]), vecino)).toEqual({
         ok: false,
         motivo: 'DEMASIADO_CERCA',
+        detalle: { vecinoOcupado: centro },
       });
     }
   });
@@ -54,6 +55,7 @@ describe('validarDistancia', () => {
     expect(validarDistancia(mapa, new Set([vecino]), centro)).toEqual({
       ok: false,
       motivo: 'DEMASIADO_CERCA',
+      detalle: { vecinoOcupado: vecino },
     });
   });
 

@@ -36,13 +36,15 @@ describe('puedeColocarPoblado', () => {
     const estado = con({ [n0]: poblado('b') }, {});
     expect(puedeColocarPoblado(mesa, estado, 'a', n0, conCamino)).toMatchObject({
       motivo: 'VERTICE_OCUPADO',
+      detalle: { dueno: 'b' },
     });
   });
 
-  it('rechaza un vértice con un vecino ocupado', () => {
+  it('rechaza un vértice con un vecino ocupado y dice cuál y de quién', () => {
     const estado = con({ [centro.id]: poblado('b') }, {});
     expect(puedeColocarPoblado(mesa, estado, 'a', n0, conCamino)).toMatchObject({
       motivo: 'DEMASIADO_CERCA',
+      detalle: { vecinoOcupado: centro.id, dueno: 'b' },
     });
   });
 
@@ -84,6 +86,7 @@ describe('puedeColocarCamino', () => {
     const estado = con({}, { [aristaCentroN0]: 'b' });
     expect(puedeColocarCamino(mesa, estado, 'a', aristaCentroN0)).toMatchObject({
       motivo: 'ARISTA_OCUPADA',
+      detalle: { dueno: 'b' },
     });
   });
 
@@ -114,6 +117,7 @@ describe('puedeColocarCamino', () => {
     expect(puedeColocarCamino(mesa, estado, 'a', aristaN0X)).toEqual({
       ok: false,
       motivo: 'CAMINO_CORTADO',
+      detalle: { verticeCortado: n0, dueno: 'b' },
     });
   });
 

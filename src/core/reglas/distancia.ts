@@ -3,7 +3,13 @@ import type { Mapa } from '../mapa/mapa.js';
 export type MotivoRechazo = 'VERTICE_INEXISTENTE' | 'VERTICE_OCUPADO' | 'DEMASIADO_CERCA';
 
 export type Validacion =
-  { readonly ok: true } | { readonly ok: false; readonly motivo: MotivoRechazo };
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly motivo: MotivoRechazo;
+      /** En DEMASIADO_CERCA: el vecino con poblado o ciudad que lo causa. */
+      readonly detalle?: { readonly vecinoOcupado: string };
+    };
 
 /**
  * Regla de la distancia: un poblado solo va en un vértice vacío cuyos vecinos no tengan poblado ni
@@ -19,8 +25,9 @@ export function validarDistancia(
   const vertice = mapa.vertices.find((v) => v.id === verticeId);
   if (!vertice) return { ok: false, motivo: 'VERTICE_INEXISTENTE' };
   if (ocupados.has(verticeId)) return { ok: false, motivo: 'VERTICE_OCUPADO' };
-  if (vertice.vecinos.some((id) => ocupados.has(id))) {
-    return { ok: false, motivo: 'DEMASIADO_CERCA' };
+  const vecinoOcupado = vertice.vecinos.find((id) => ocupados.has(id));
+  if (vecinoOcupado !== undefined) {
+    return { ok: false, motivo: 'DEMASIADO_CERCA', detalle: { vecinoOcupado } };
   }
   return { ok: true };
 }

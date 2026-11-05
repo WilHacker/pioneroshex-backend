@@ -291,6 +291,7 @@ describe('construcción rechazada', () => {
       expect(decidir(mesa, estado, camino(aristaN0X))).toEqual({
         ok: false,
         motivo: 'CAMINO_CORTADO',
+        detalle: { verticeCortado: n0, dueno: j1 },
       });
     });
 
@@ -298,6 +299,7 @@ describe('construcción rechazada', () => {
       expect(decidir(mesa, listo, camino(aristaCentroN0))).toEqual({
         ok: false,
         motivo: 'ARISTA_OCUPADA',
+        detalle: { dueno: listo.caminos[aristaCentroN0] },
       });
     });
 
@@ -318,6 +320,7 @@ describe('construcción rechazada', () => {
       expect(decidir(mesa, listo, pobladoEn(n0))).toEqual({
         ok: false,
         motivo: 'DEMASIADO_CERCA',
+        detalle: { vecinoOcupado: centro.id, dueno: listo.edificios[centro.id]?.dueno },
       });
     });
 
@@ -325,6 +328,7 @@ describe('construcción rechazada', () => {
       expect(decidir(mesa, listo, pobladoEn(centro.id))).toEqual({
         ok: false,
         motivo: 'VERTICE_OCUPADO',
+        detalle: { dueno: listo.edificios[centro.id]?.dueno },
       });
     });
 
