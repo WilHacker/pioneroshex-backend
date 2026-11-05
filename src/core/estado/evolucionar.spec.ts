@@ -204,6 +204,73 @@ describe('evolucionar', () => {
       expect(acept.recursos.OVEJA).toBe(4);
     });
 
+    it('TRATO_ACEPTADO descarta los otros tratos que su proponente ya no puede cumplir', () => {
+      const j2 = inicial.jugadores[2]!.id;
+      const pobre = conCambios(base, {
+        jugadores: base.jugadores.map((j) =>
+          j.id === j2 ? { ...j, recursos: { ...j.recursos, MADERA: 0 } } : j,
+        ),
+      });
+      const imposible = { ...trato, id: 'imposible', proponente: j2 };
+      const posible = { ...trato, id: 'posible', proponente: j1 };
+      const nuevo = evolucionarSinMutar(
+        conCambios(pobre, { tratos: [trato, imposible, posible] }),
+        {
+          tipo: 'TRATO_ACEPTADO',
+          tratoId: trato.id,
+          proponente: j0,
+          aceptante: j1,
+          entrega: trato.entrega,
+          pide: trato.pide,
+        },
+      );
+      expect(nuevo.tratos.map((t) => t.id)).toEqual(['posible']);
+    });
+
+    describe('TRATO_RECHAZADO', () => {
+      const j2 = inicial.jugadores[2]!.id;
+      const j3 = inicial.jugadores[3]!.id;
+
+      it('un trato dirigido desaparece al rechazarlo su destinatario', () => {
+        const dirigido = { ...trato, destinatario: j1 };
+        const nuevo = evolucionarSinMutar(conCambios(base, { tratos: [dirigido] }), {
+          tipo: 'TRATO_RECHAZADO',
+          tratoId: dirigido.id,
+          jugador: j1,
+        });
+        expect(nuevo.tratos).toHaveLength(0);
+      });
+
+      it('un trato abierto anota quién lo rechazó y sigue vivo mientras quede algún rival', () => {
+        const nuevo = evolucionarSinMutar(conCambios(base, { tratos: [trato] }), {
+          tipo: 'TRATO_RECHAZADO',
+          tratoId: trato.id,
+          jugador: j1,
+        });
+        expect(nuevo.tratos).toHaveLength(1);
+        expect(nuevo.tratos[0]?.rechazadoPor).toEqual([j1]);
+      });
+
+      it('un trato abierto desaparece cuando lo han rechazado todos los rivales', () => {
+        const casiTodos = { ...trato, rechazadoPor: [j1, j2] };
+        const nuevo = evolucionarSinMutar(conCambios(base, { tratos: [casiTodos] }), {
+          tipo: 'TRATO_RECHAZADO',
+          tratoId: trato.id,
+          jugador: j3,
+        });
+        expect(nuevo.tratos).toHaveLength(0);
+      });
+
+      it('rechazar un trato que ya no existe solo sube la versión', () => {
+        const nuevo = evolucionarSinMutar(base, {
+          tipo: 'TRATO_RECHAZADO',
+          tratoId: 'fantasma',
+          jugador: j1,
+        });
+        expect(nuevo.tratos).toEqual(base.tratos);
+      });
+    });
+
     it('FASE_ESPECIAL_INICIADA y CONSTRUCCION_ESPECIAL_PASADA', () => {
       const estadoEsp = evolucionarSinMutar(base, {
         tipo: 'FASE_ESPECIAL_INICIADA',
@@ -339,6 +406,12 @@ describe('evolucionar', () => {
         causa: 'VOLUNTARIA',
       }),
     ).toThrow('Jugador inexistente: nadie');
+  });
+
+  it('un evento de tipo desconocido lanza un error claro', () => {
+    expect(() => evolucionar(base, { tipo: 'INVENTADO' } as never)).toThrow(
+      'Evento desconocido: {"tipo":"INVENTADO"}',
+    );
   });
 
   it('el estado resultante es serializable a JSON y está congelado', () => {
