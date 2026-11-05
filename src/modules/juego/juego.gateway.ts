@@ -82,11 +82,13 @@ export class JuegoGateway implements OnGatewayConnection, OnGatewayDisconnect {
       baja,
       permitir: crearLimitador(ACCIONES_MAX_POR_VENTANA, VENTANA_MS),
     });
+    const { acciones, sitios } = actor.ayuda(jugadorId);
     socket.emit(EVENTO_INICIO, {
       jugadorId,
       mesa: actor.mesaPublica,
       vista: actor.vista(jugadorId),
-      acciones: actor.acciones(jugadorId),
+      acciones,
+      sitios,
     });
   }
 

@@ -1,3 +1,4 @@
+import { clave } from '../mapa/coordenadas.js';
 import type { Costo } from '../reglas/costos.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { puedeColocarCamino } from './conectividad.js';
@@ -322,18 +323,90 @@ export function enumerarAcciones(
 }
 
 /**
- * Una entrada por tipo de acción. Si no está disponible: el motivo general que da `decidir`
+ * Dónde puede actuar el jugador ahora, para que el cliente resalte solo lo válido. Los vértices y
+ * aristas son ids del mapa; las casillas son claves `"q,r"`. Es solo ayuda: manda `decidir`.
+ */
+export interface Sitios {
+  readonly poblados: readonly string[];
+  readonly ciudades: readonly string[];
+  readonly caminos: readonly string[];
+  readonly ladron: readonly string[];
+  readonly caballero: readonly string[];
+  /** Aristas donde puede ir alguno de los caminos de "construcción de carreteras". */
+  readonly carreteras: readonly string[];
+}
+
+export const SITIOS_VACIOS: Sitios = Object.freeze({
+  poblados: [],
+  ciudades: [],
+  caminos: [],
+  ladron: [],
+  caballero: [],
+  carreteras: [],
+});
+
+const unicos = (valores: readonly string[]): string[] => [...new Set(valores)];
+
+function sitiosDe(aceptadas: readonly Accion[]): Sitios {
+  const poblados: string[] = [];
+  const ciudades: string[] = [];
+  const caminos: string[] = [];
+  const ladron: string[] = [];
+  const caballero: string[] = [];
+  const carreteras: string[] = [];
+  for (const accion of aceptadas) {
+    switch (accion.tipo) {
+      case 'COLOCAR_POBLADO_INICIAL':
+      case 'CONSTRUIR_POBLADO':
+        poblados.push(accion.vertice);
+        break;
+      case 'CONSTRUIR_CIUDAD':
+        ciudades.push(accion.vertice);
+        break;
+      case 'COLOCAR_CAMINO_INICIAL':
+      case 'CONSTRUIR_CAMINO':
+        caminos.push(accion.arista);
+        break;
+      case 'MOVER_LADRON':
+        ladron.push(clave(accion.destino));
+        break;
+      case 'JUGAR_CABALLERO':
+        caballero.push(clave(accion.destino));
+        break;
+      case 'JUGAR_CONSTRUCCION_CARRETERAS':
+        carreteras.push(...accion.aristas);
+        break;
+      default:
+        break;
+    }
+  }
+  return {
+    poblados: unicos(poblados),
+    ciudades: unicos(ciudades),
+    caminos: unicos(caminos),
+    ladron: unicos(ladron),
+    caballero: unicos(caballero),
+    carreteras: unicos(carreteras),
+  };
+}
+
+/**
+ * Lo que necesita un cliente para pintar sus botones y resaltar el tablero: una entrada por tipo de
+ * acción y los sitios válidos. Si una acción no está disponible: el motivo general que da `decidir`
  * (turno, fase, piezas, recursos con `falta`) o SIN_LUGAR_VALIDO si solo falla la posición.
  */
-export function accionesDisponibles(
+export function ayuda(
   mesa: Mesa,
   estado: Estado,
   jugador: JugadorId,
-): readonly AccionDisponible[] {
+): { readonly acciones: readonly AccionDisponible[]; readonly sitios: Sitios } {
   validarJugador(estado, jugador);
-  return TIPOS.map((tipo): AccionDisponible => {
-    const { aceptadas, primerRechazo } = evaluar(mesa, estado, jugador, tipo);
-    if (aceptadas.length > 0) return { tipo, disponible: true };
+  const aceptadas: Accion[] = [];
+  const acciones = TIPOS.map((tipo): AccionDisponible => {
+    const evaluacion = evaluar(mesa, estado, jugador, tipo);
+    aceptadas.push(...evaluacion.aceptadas);
+    const { primerRechazo } = evaluacion;
+    if (evaluacion.aceptadas.length > 0) return { tipo, disponible: true };
     if (!primerRechazo || ALCANCE[primerRechazo.motivo] === 'lugar') {
       return { tipo, disponible: false, motivo: 'SIN_LUGAR_VALIDO' };
     }
@@ -342,4 +415,14 @@ export function accionesDisponibles(
       ? { tipo, disponible: false, motivo, falta: { ...falta } }
       : { tipo, disponible: false, motivo };
   });
+  return { acciones, sitios: sitiosDe(aceptadas) };
+}
+
+/** Una entrada por tipo de acción (ver `ayuda`). */
+export function accionesDisponibles(
+  mesa: Mesa,
+  estado: Estado,
+  jugador: JugadorId,
+): readonly AccionDisponible[] {
+  return ayuda(mesa, estado, jugador).acciones;
 }

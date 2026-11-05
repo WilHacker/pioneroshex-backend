@@ -1,5 +1,10 @@
 import { Logger } from '@nestjs/common';
-import { accionesDisponibles, type AccionDisponible } from '../../core/estado/acciones.js';
+import {
+  ayuda,
+  SITIOS_VACIOS,
+  type AccionDisponible,
+  type Sitios,
+} from '../../core/estado/acciones.js';
 import type { Mesa } from '../../core/estado/mesa.js';
 import { mesaPublica, type MesaPublica } from '../../core/estado/mesa-publica.js';
 import {
@@ -90,12 +95,22 @@ export class PartidaActor {
     return vistaPara(this.actual, observador);
   }
 
-  /** Qué puede hacer `jugador` ahora (para pintar los botones). Vacío si la partida terminó. */
-  acciones(jugador: Accion['jugador']): readonly AccionDisponible[] {
+  /** Qué puede hacer `jugador` ahora y dónde (para pintar botones y resaltar el tablero). */
+  ayuda(jugador: Accion['jugador']): {
+    readonly acciones: readonly AccionDisponible[];
+    readonly sitios: Sitios;
+  } {
     if (!this.actual.jugadores.some((j) => j.id === jugador)) {
       throw new Error(`El jugador "${jugador}" no participa en la partida`);
     }
-    return this.actual.fase === 'FIN' ? [] : accionesDisponibles(this.mesa, this.actual, jugador);
+    return this.actual.fase === 'FIN'
+      ? { acciones: [], sitios: SITIOS_VACIOS }
+      : ayuda(this.mesa, this.actual, jugador);
+  }
+
+  /** Solo las acciones de `ayuda`. Vacío si la partida terminó. */
+  acciones(jugador: Accion['jugador']): readonly AccionDisponible[] {
+    return this.ayuda(jugador).acciones;
   }
 
   /** Empieza a recibir notificaciones como `observador`. Devuelve la función para darse de baja. */

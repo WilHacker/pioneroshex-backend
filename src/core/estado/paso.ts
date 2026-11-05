@@ -1,4 +1,4 @@
-import { accionesDisponibles, type AccionDisponible } from './acciones.js';
+import { ayuda, SITIOS_VACIOS, type AccionDisponible, type Sitios } from './acciones.js';
 import { aplicar } from './aplicar.js';
 import { eventosPara } from './eventos.js';
 import type { Mesa } from './mesa.js';
@@ -15,6 +15,8 @@ export interface Notificacion {
   readonly eventos: readonly Evento[];
   /** Vacío si no se pidió, si es espectador o si la partida terminó. */
   readonly acciones: readonly AccionDisponible[];
+  /** Dónde puede actuar; vacío cuando `acciones` lo está. */
+  readonly sitios: Sitios;
 }
 
 export type ResultadoPaso =
@@ -63,12 +65,18 @@ export function paso(
     ok: true,
     estado: nuevo,
     eventosCompletos: eventos,
-    notificaciones: unicos.map((observador): Notificacion => ({
-      observador,
-      vista: vistaPara(nuevo, observador),
-      eventos: eventosPara(eventos, observador),
-      acciones:
-        conAcciones && observador !== null ? accionesDisponibles(mesa, nuevo, observador) : [],
-    })),
+    notificaciones: unicos.map((observador): Notificacion => {
+      const ayudaDe =
+        conAcciones && observador !== null
+          ? ayuda(mesa, nuevo, observador)
+          : { acciones: [], sitios: SITIOS_VACIOS };
+      return {
+        observador,
+        vista: vistaPara(nuevo, observador),
+        eventos: eventosPara(eventos, observador),
+        acciones: ayudaDe.acciones,
+        sitios: ayudaDe.sitios,
+      };
+    }),
   };
 }

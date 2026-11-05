@@ -20,6 +20,7 @@ interface Inicio {
   mesa: { vertices: { id: string }[] };
   vista: { turnoDe: string | null; yo: string };
   acciones: { tipo: string; disponible: boolean }[];
+  sitios: { poblados: string[]; caminos: string[] };
 }
 
 let app: INestApplication;
@@ -143,6 +144,10 @@ describe('Socket del juego', () => {
     expect(inicio?.vista.yo).toBe('j1');
     expect(inicio?.mesa.vertices.length).toBeGreaterThan(0);
     expect(inicio?.acciones.length).toBeGreaterThan(0);
+    // Solo quien tiene el turno recibe sitios donde poner su poblado.
+    expect((inicio?.sitios.poblados.length ?? 0) > 0).toBe(
+      inicio?.vista.turnoDe === inicio?.jugadorId,
+    );
     const secreta = salas.partida(a.salaId)!.estado.config.semillaAzar;
     expect(JSON.stringify(inicio)).not.toContain(secreta);
     socket.disconnect();

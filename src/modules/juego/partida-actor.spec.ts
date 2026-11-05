@@ -247,3 +247,30 @@ describe('PartidaActor: acciones disponibles', () => {
     expect(() => new PartidaActor(mesa, preTirada).acciones('intruso')).toThrow(/no participa/);
   });
 });
+
+describe('PartidaActor: sitios legales', () => {
+  it('da los sitios válidos junto a las acciones, y ninguno a quien no tiene el turno', () => {
+    const actor = new PartidaActor(mesa, inicial);
+    const turno = inicial.jugadores[inicial.turnoDe]!.id;
+    const otro = inicial.jugadores.find((j) => j.id !== turno)!.id;
+    expect(actor.ayuda(turno).sitios.poblados.length).toBeGreaterThan(0);
+    expect(actor.ayuda(otro).sitios.poblados).toEqual([]);
+  });
+
+  it('con la partida terminada no hay acciones ni sitios', () => {
+    const fin = conCambios(preTirada, { fase: 'FIN', ganador: a });
+    const ayuda = new PartidaActor(mesa, fin).ayuda(a);
+    expect(ayuda.acciones).toEqual([]);
+    expect(ayuda.sitios.poblados).toEqual([]);
+  });
+
+  it('las notificaciones de una jugada llevan los sitios de cada observador', async () => {
+    const actor = new PartidaActor(mesa, inicial, { incluirAcciones: true });
+    const recibidas: Notificacion[] = [];
+    const turno = inicial.jugadores[inicial.turnoDe]!.id;
+    actor.suscribir(turno, (n) => recibidas.push(n));
+    const vertice = actor.mesaPublica.vertices[0]!.id;
+    await actor.enviar({ tipo: 'COLOCAR_POBLADO_INICIAL', jugador: turno, vertice });
+    expect(recibidas[0]?.sitios.caminos.length).toBeGreaterThan(0);
+  });
+});
