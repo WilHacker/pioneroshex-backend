@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { Mesa } from '../../core/estado/mesa.js';
+import { mesaPublica, type MesaPublica } from '../../core/estado/mesa-publica.js';
 import {
   paso,
   type Notificacion,
@@ -34,6 +35,8 @@ export class PartidaActor {
   private readonly escuchas = new Map<Observador, Set<{ readonly escucha: Escucha }>>();
   private actual: Estado;
   private cola: Promise<unknown> = Promise.resolve();
+  /** El tablero no cambia con las jugadas: se calcula una vez. */
+  readonly mesaPublica: MesaPublica;
 
   constructor(
     private readonly mesa: Mesa,
@@ -41,6 +44,7 @@ export class PartidaActor {
     private readonly opciones: OpcionesPaso = {},
   ) {
     this.actual = estadoInicial;
+    this.mesaPublica = mesaPublica(mesa);
   }
 
   get estado(): Estado {

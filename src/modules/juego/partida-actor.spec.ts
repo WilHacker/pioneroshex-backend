@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { crearPartida } from '../../core/estado/crear.js';
+import { mesaPublica } from '../../core/estado/mesa-publica.js';
 import type { Notificacion } from '../../core/estado/paso.js';
 import { conCambios, mesaDePrueba } from '../../core/estado/pruebas.js';
 import type { Accion } from '../../core/estado/tipos.js';
@@ -161,5 +162,13 @@ describe('PartidaActor: vista de quien entra o se reconecta', () => {
   it('pedir la vista de un jugador que no participa lanza', () => {
     const actor = new PartidaActor(mesa, preTirada);
     expect(() => actor.vista('fantasma')).toThrow(/fantasma/);
+  });
+
+  it('da también el tablero, que no cambia con las jugadas, para dibujarlo al entrar', async () => {
+    const actor = new PartidaActor(mesa, preTirada);
+    const antes = actor.mesaPublica;
+    expect(antes).toEqual(mesaPublica(mesa));
+    await actor.enviar(tirar);
+    expect(actor.mesaPublica).toBe(antes);
   });
 });

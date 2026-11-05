@@ -9,8 +9,18 @@ import { crearMesa, type Mesa } from './mesa.js';
 import type { Estado } from './tipos.js';
 
 /**
+ * Semilla del azar de prueba para una del mapa: `AZAR-<semilla>`. Si la del mapa fuera un prefijo
+ * de esa (`A`, `AZ`, `AZAR-`...), `crearGameConfig` la rechazaría por derivada; entonces se antepone
+ * `#`, que nunca es la primera letra de una semilla que empiece con `A`.
+ */
+function azarDePrueba(semilla: string): string {
+  const base = `AZAR-${semilla}`;
+  return base.startsWith(semilla) ? `#${base}` : base;
+}
+
+/**
  * Configuración de prueba. `semilla` es un atajo SOLO para tests: fija la del mapa y una del azar
- * que no empieza con ella (`AZAR-<semilla>`). En producción la `semillaAzar` la da el servidor.
+ * independiente de ella. En producción la `semillaAzar` la da el servidor.
  */
 export function configDePrueba(
   entrada: Partial<GameConfigEntrada> & { readonly semilla?: string } = {},
@@ -18,7 +28,7 @@ export function configDePrueba(
   const { semilla = 'PRUEBA', ...resto } = entrada;
   return crearGameConfig({
     semillaMapa: semilla,
-    semillaAzar: `AZAR-${semilla}`,
+    semillaAzar: azarDePrueba(semilla),
     jugadores: 4,
     ...resto,
   });
