@@ -1,13 +1,12 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { crearGameConfig } from '../partida/game-config.js';
 import type { LimitesDePiezas } from '../reglas/costos.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { accionesDisponibles, enumerarAcciones } from './acciones.js';
 import { aplicar } from './aplicar.js';
 import { crearPartida } from './crear.js';
 import { crearMesa, type Mesa } from './mesa.js';
-import { aristaEntre, conCambios, mesaDePrueba } from './pruebas.js';
+import { aristaEntre, configDePrueba, conCambios, mesaDePrueba } from './pruebas.js';
 import type { Accion, Estado, Fase, JugadorId } from './tipos.js';
 
 const TIPOS: readonly Accion['tipo'][] = [
@@ -172,7 +171,7 @@ describe('enumerarAcciones: propiedad sobre varias semillas', () => {
         fc.integer({ min: 2, max: 3 }),
         fc.array(fc.nat(), { minLength: 14, maxLength: 14 }),
         (semilla, jugadores, elecciones) => {
-          const mesa = crearMesa(crearGameConfig({ semilla, jugadores }));
+          const mesa = crearMesa(configDePrueba({ semilla, jugadores }));
           const ids = Array.from({ length: jugadores }, (_, i) => `j${i}`);
           let estado = crearPartida(mesa, ids);
           const fases = new Set<Fase>();

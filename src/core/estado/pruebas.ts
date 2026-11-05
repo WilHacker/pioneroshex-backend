@@ -1,11 +1,33 @@
 // Utilidades solo para tests: excluidas de la cobertura y del build.
-import { crearGameConfig, type GameConfigEntrada } from '../partida/game-config.js';
+import {
+  crearGameConfig,
+  type GameConfig,
+  type GameConfigEntrada,
+} from '../partida/game-config.js';
 import type { CasillaTablero } from '../reglas/tablero.js';
 import { crearMesa, type Mesa } from './mesa.js';
 import type { Estado } from './tipos.js';
 
-export function mesaDePrueba(opciones: Partial<GameConfigEntrada> = {}): Mesa {
-  return crearMesa(crearGameConfig({ semilla: 'PRUEBA', jugadores: 4, ...opciones }));
+/**
+ * Configuración de prueba. `semilla` es un atajo SOLO para tests: fija la del mapa y una del azar
+ * que no empieza con ella (`AZAR-<semilla>`). En producción la `semillaAzar` la da el servidor.
+ */
+export function configDePrueba(
+  entrada: Partial<GameConfigEntrada> & { readonly semilla?: string } = {},
+): GameConfig {
+  const { semilla = 'PRUEBA', ...resto } = entrada;
+  return crearGameConfig({
+    semillaMapa: semilla,
+    semillaAzar: `AZAR-${semilla}`,
+    jugadores: 4,
+    ...resto,
+  });
+}
+
+export function mesaDePrueba(
+  opciones: Partial<GameConfigEntrada> & { readonly semilla?: string } = {},
+): Mesa {
+  return crearMesa(configDePrueba(opciones));
 }
 
 /** Id de la arista que une dos vértices vecinos; falla si no existe. */

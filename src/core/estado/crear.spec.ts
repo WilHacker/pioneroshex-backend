@@ -90,7 +90,8 @@ describe('crearPartida', () => {
 
     it('con la misma semilla da el mismo orden, el de mezclar(ids, semilla:orden)', () => {
       expect(idsDe('X')).toEqual(idsDe('X'));
-      expect(idsDe('X')).toEqual(mezclar(IDS4, crearRng('X:orden')));
+      // Con el atajo de prueba, la semillaAzar es 'AZAR-X' y el orden sale de 'AZAR-X:orden'.
+      expect(idsDe('X')).toEqual(mezclar(IDS4, crearRng('AZAR-X:orden')));
     });
 
     it('con semillas distintas aparecen órdenes distintos', () => {

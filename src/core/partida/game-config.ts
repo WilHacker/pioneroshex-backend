@@ -37,11 +37,17 @@ export interface GameConfig {
   readonly puntosVictoria: number;
 }
 
-/** Configuración de entrada: admite semillaMapa y semillaAzar por separado, o semilla como atajo para ambas. */
+/**
+ * Configuración de entrada. Las dos semillas son obligatorias y **independientes**:
+ * - `semillaMapa` es pública (se muestra en la vista y se comparte).
+ * - `semillaAzar` es secreta: de ella salen los dados, el mazo y los robos. `core/` es puro y no
+ *   puede generar entropía, así que quien crea la partida (el servidor, en `modules/`) debe darla
+ *   desde un generador seguro (p. ej. `crypto.randomBytes(16).toString('hex')`). Nunca derivarla
+ *   de la `semillaMapa`: cualquiera que vea la vista podría calcularla.
+ */
 export type GameConfigEntrada = {
-  readonly semillaMapa?: string;
-  readonly semillaAzar?: string;
-  readonly semilla?: string;
+  readonly semillaMapa: string;
+  readonly semillaAzar: string;
 } & Partial<Omit<GameConfig, 'semillaMapa' | 'semillaAzar'>>;
 
 const esEnteroEnRango = (valor: number, min: number, max: number): boolean =>
@@ -54,15 +60,13 @@ const verticesDelMapa = (radio: number): number => 6 * (radio + 1) ** 2;
  * y valida el resultado. Devuelve un objeto nuevo y congelado.
  */
 export function crearGameConfig(entrada: GameConfigEntrada): GameConfig {
-  const semillaMapa = entrada.semillaMapa ?? entrada.semilla;
-  const semillaAzar = entrada.semillaAzar ?? entrada.semilla ?? semillaMapa;
   const jugadores = entrada.jugadores ?? JUGADORES_MAPA_CLASICO;
   const turnRuleMode = entrada.turnRuleMode ?? 'A';
   const esMapaGrande = jugadores > JUGADORES_MAPA_CLASICO;
 
   const config: GameConfig = {
-    semillaMapa: semillaMapa ?? '',
-    semillaAzar: semillaAzar ?? '',
+    semillaMapa: entrada.semillaMapa ?? '',
+    semillaAzar: entrada.semillaAzar ?? '',
     jugadores,
     turnRuleMode,
     radio: entrada.radio ?? (esMapaGrande ? RADIO_GRANDE : RADIO_CLASICO),
@@ -82,6 +86,12 @@ function validar(config: GameConfig): void {
   }
   if (config.semillaAzar.trim() === '') {
     throw new Error('La semilla del azar no puede estar vacía');
+  }
+  // Cubre el error típico: derivar la secreta de la pública (`${mapa}:azar`) o repetirla.
+  if (config.semillaAzar.startsWith(config.semillaMapa)) {
+    throw new Error(
+      'La semilla del azar debe ser independiente de la del mapa: la del mapa es pública y revelaría los dados y el mazo',
+    );
   }
   if (!esEnteroEnRango(config.jugadores, JUGADORES_MIN, JUGADORES_MAX)) {
     throw new Error(

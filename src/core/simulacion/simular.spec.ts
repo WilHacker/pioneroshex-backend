@@ -3,7 +3,8 @@ import { aplicar } from '../estado/aplicar.js';
 import { crearMesa } from '../estado/mesa.js';
 import { puntosDe } from '../estado/puntos.js';
 import type { Accion, Estado } from '../estado/tipos.js';
-import { crearGameConfig, type GameConfig } from '../partida/game-config.js';
+import { configDePrueba } from '../estado/pruebas.js';
+import type { GameConfig } from '../partida/game-config.js';
 import { verificarInvariantes } from './invariantes.js';
 import { reproducir, simularPartida } from './simular.js';
 
@@ -28,7 +29,7 @@ function comprobarFinal(config: GameConfig, estado: Estado): void {
 }
 
 function simular3(semilla: string, maxTurnos = MAX_TURNOS) {
-  const config = crearGameConfig({ semilla, jugadores: 3, puntosVictoria: PUNTOS });
+  const config = configDePrueba({ semilla, jugadores: 3, puntosVictoria: PUNTOS });
   return {
     config,
     ...simularPartida(config, idsDe(3), { semillaBot: `bot-${semilla}`, maxTurnos }),
@@ -54,7 +55,7 @@ describe('simularPartida', () => {
     // que termina (13 de 15 terminan; `seis-6` y `seis-7` se estancan, esperable sin comercio).
     { jugadores: 6, semilla: 'seis-0' },
   ])('$jugadores jugadores ($semilla) también terminan', { timeout: 10000 }, (caso) => {
-    const config = crearGameConfig({ ...caso, puntosVictoria: PUNTOS });
+    const config = configDePrueba({ ...caso, puntosVictoria: PUNTOS });
     expect(config.radio).toBe(caso.jugadores > 4 ? 3 : 2);
     const { estado } = simularPartida(config, idsDe(caso.jugadores), {
       semillaBot: `bot-${caso.semilla}`,
@@ -67,7 +68,7 @@ describe('simularPartida', () => {
     'simula una partida en Modo B con 5 jugadores y fase especial de construcción',
     { timeout: 15000 },
     () => {
-      const config = crearGameConfig({
+      const config = configDePrueba({
         semilla: 'seis-0',
         jugadores: 5,
         turnRuleMode: 'B',
@@ -89,7 +90,7 @@ describe('simularPartida', () => {
   });
 
   it('lanza estancamiento si un turno pasa de maxAccionesPorTurno', () => {
-    const config = crearGameConfig({ semilla: 'sim-0', jugadores: 3, puntosVictoria: PUNTOS });
+    const config = configDePrueba({ semilla: 'sim-0', jugadores: 3, puntosVictoria: PUNTOS });
     // La preparación de 3 jugadores son 12 acciones dentro del turno 0.
     const opciones = { semillaBot: 'b', maxTurnos: MAX_TURNOS, maxAccionesPorTurno: 5 };
     expect(() => simularPartida(config, idsDe(3), opciones)).toThrow(
@@ -98,7 +99,7 @@ describe('simularPartida', () => {
   });
 
   it('lanza estancamiento si pasa de maxTurnos', () => {
-    const config = crearGameConfig({ semilla: 'sim-0', jugadores: 3, puntosVictoria: PUNTOS });
+    const config = configDePrueba({ semilla: 'sim-0', jugadores: 3, puntosVictoria: PUNTOS });
     expect(() => simularPartida(config, idsDe(3), { semillaBot: 'b', maxTurnos: 3 })).toThrow(
       /estancamiento/,
     );
@@ -106,7 +107,7 @@ describe('simularPartida', () => {
 });
 
 describe('repetición', () => {
-  const config = crearGameConfig({ semilla: 'sim-1', jugadores: 3, puntosVictoria: PUNTOS });
+  const config = configDePrueba({ semilla: 'sim-1', jugadores: 3, puntosVictoria: PUNTOS });
   const ids = idsDe(3);
   let estado: Estado;
   let acciones: readonly Accion[];
@@ -152,7 +153,7 @@ const casos = (jugadores: number, n: number) =>
 const CASOS = [...casos(2, 10), ...casos(3, 15), ...casos(4, 10), ...casos(6, 5), ...casos(10, 3)];
 
 function jugar({ jugadores, semilla }: { jugadores: number; semilla: string }): string {
-  const config = crearGameConfig({ semilla, jugadores });
+  const config = configDePrueba({ semilla, jugadores });
   try {
     const { estado } = simularPartida(config, idsDe(jugadores), {
       semillaBot: `bot-${semilla}`,

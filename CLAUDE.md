@@ -86,6 +86,11 @@ Diseño del juego:
   radio R: `12R+6` aristas. Tipos: `GENERICO` (3:1) o un recurso (2:1); sin puerto, 4:1.
 - Azar en `core/`: un flujo por tema (`semilla`, `semilla:puertos`...) con `crearRng` de
   `reglas/azar.ts`, para que añadir un tema nuevo no cambie el reparto de los existentes.
+- Dos semillas independientes en `GameConfig`: `semillaMapa` (pública, sale en la vista) y
+  `semillaAzar` (secreta: dados, mazo, robos). `crearGameConfig` exige ambas y rechaza una
+  `semillaAzar` igual o derivada de la del mapa. `core/` no genera entropía: el servidor
+  (`modules/`) debe crearla con `crypto.randomBytes`. El atajo `semilla` es solo de tests
+  (`configDePrueba` en `estado/pruebas.ts`).
 - Eventos de socket en español (`juego:construirCamino`): nombres **provisionales**.
 
 ## Trampas conocidas

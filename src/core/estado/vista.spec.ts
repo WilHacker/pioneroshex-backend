@@ -1,7 +1,12 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { crearGameConfig } from '../partida/game-config.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
+import { simularPartida } from '../simulacion/simular.js';
+import { aplicar } from './aplicar.js';
 import { crearPartida } from './crear.js';
+import { crearMesa } from './mesa.js';
+import { puntosDe } from './puntos.js';
 import { conCambios, mesaDePrueba } from './pruebas.js';
 import type { Estado } from './tipos.js';
 import { vistaPara } from './vista.js';
@@ -126,6 +131,7 @@ describe('vistaPara', () => {
       [
         'caballerosJugados',
         'cartasDesarrollo',
+        'desglose',
         'id',
         'piezasRestantes',
         'puntos',
@@ -207,4 +213,103 @@ describe('vistaPara: no filtra manos ajenas (propiedad)', () => {
       }),
     );
   });
+});
+
+const de = (vista: ReturnType<typeof vistaPara>, id: string) =>
+  vista.jugadores.find((j) => j.id === id)!;
+
+describe('vistaPara: desglose de puntos', () => {
+  const estado = conCambios(conManos([]), {
+    edificios: { [v1]: { dueno: j0, tipo: 'POBLADO' }, [v2]: { dueno: j0, tipo: 'CIUDAD' } },
+    granRuta: j0,
+    jugadores: base.jugadores.map((j) =>
+      j.id === j1
+        ? Object.assign({}, j, { cartasDesarrollo: ['PUNTO_VICTORIA', 'PUNTO_VICTORIA'] })
+        : j,
+    ),
+  });
+
+  it('muestra poblados, ciudades y títulos de todos, con el total público', () => {
+    expect(de(vistaPara(estado, j2), j0).desglose).toEqual({
+      poblados: 1,
+      ciudades: 2,
+      granEjercito: 0,
+      granRuta: 2,
+      cartasPuntoVictoria: null,
+      total: 5,
+    });
+  });
+
+  it('oculta las cartas de punto de victoria ajenas al rival y al espectador', () => {
+    for (const observador of [j0, j2, null]) {
+      const ajeno = de(vistaPara(estado, observador), j1);
+      expect(ajeno.desglose.cartasPuntoVictoria).toBeNull();
+      expect(ajeno.desglose.total).toBe(0);
+      expect(ajeno.puntos).toBe(0);
+    }
+  });
+
+  it('el dueño ve sus propias cartas de punto de victoria en el desglose y en el total', () => {
+    const propio = de(vistaPara(estado, j1), j1);
+    expect(propio.desglose.cartasPuntoVictoria).toBe(2);
+    expect(propio.desglose.total).toBe(2);
+    expect(propio.puntos).toBe(2);
+  });
+
+  it('al terminar la partida se revelan las cartas de todos', () => {
+    const fin = conCambios(estado, { fase: 'FIN', ganador: j0 });
+    for (const observador of [j0, j2, null]) {
+      const ajeno = de(vistaPara(fin, observador), j1);
+      expect(ajeno.desglose.cartasPuntoVictoria).toBe(2);
+      expect(ajeno.desglose.total).toBe(2);
+      expect(ajeno.puntos).toBe(2);
+    }
+  });
+});
+
+describe('vistaPara: no filtra secretos en partidas completas (propiedad)', () => {
+  const IDS = ['a', 'b', 'c'];
+
+  it('en cada paso de partidas simuladas, ningún observador ve lo ajeno ni la semillaAzar', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 9999 }), (n) => {
+        const config = crearGameConfig({
+          semillaMapa: `MAPA-PUBLICO-${n}`,
+          semillaAzar: `AZAR-SECRETO-${n}`,
+          jugadores: IDS.length,
+          puntosVictoria: 5,
+        });
+        const sim = simularPartida(config, IDS, { semillaBot: `bot-${n}`, maxTurnos: 600 });
+        const mesaSim = crearMesa(config);
+        const revisar = (e: Estado): void => {
+          for (const observador of [...IDS, null]) {
+            const vista = vistaPara(e, observador);
+            const json = JSON.stringify(vista);
+            expect(json).not.toContain(config.semillaAzar);
+            expect(json).toContain(config.semillaMapa);
+            expect(json).not.toContain('"mazo"');
+            for (const j of vista.jugadores) {
+              const esMio = j.id === observador;
+              expect(j.recursos === null).toBe(!esMio);
+              expect(j.cartasDesarrollo === null).toBe(!esMio);
+              const verOcultos = esMio || e.fase === 'FIN';
+              expect(j.desglose.cartasPuntoVictoria === null).toBe(!verOcultos);
+              expect(j.puntos).toBe(puntosDe(e, j.id, { incluirOcultos: verOcultos }));
+              expect(j.desglose.total).toBe(j.puntos);
+            }
+          }
+        };
+        let estado = crearPartida(mesaSim, IDS);
+        revisar(estado);
+        for (const accion of sim.acciones) {
+          const r = aplicar(mesaSim, estado, accion);
+          if (!r.ok) throw new Error(r.motivo);
+          estado = r.estado;
+          revisar(estado);
+        }
+        expect(estado.fase).toBe('FIN');
+      }),
+      { numRuns: 4 },
+    );
+  }, 60_000);
 });

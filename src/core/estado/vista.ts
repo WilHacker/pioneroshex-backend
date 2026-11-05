@@ -3,8 +3,25 @@ import type { GameConfig } from '../partida/game-config.js';
 import type { LimitesDePiezas } from '../reglas/costos.js';
 import type { CartaDesarrollo } from '../reglas/mazo.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
-import { puntosDe } from './puntos.js';
-import type { Estado, Fase, JugadorId } from './tipos.js';
+import { desglosePuntos, puntosDe } from './puntos.js';
+import type { DesglosePuntos, Estado, Fase, JugadorId } from './tipos.js';
+
+/** Como `DesglosePuntos`, pero las cartas de punto de victoria ajenas llegan como `null`. */
+export type DesglosePuntosVista = Omit<DesglosePuntos, 'cartasPuntoVictoria'> & {
+  readonly cartasPuntoVictoria: number | null;
+};
+
+function desgloseVisible(desglose: DesglosePuntos, verOcultos: boolean): DesglosePuntosVista {
+  if (verOcultos) return desglose;
+  return {
+    poblados: desglose.poblados,
+    ciudades: desglose.ciudades,
+    granEjercito: desglose.granEjercito,
+    granRuta: desglose.granRuta,
+    cartasPuntoVictoria: null,
+    total: desglose.total - desglose.cartasPuntoVictoria,
+  };
+}
 
 export interface VistaJugador {
   readonly id: JugadorId;
@@ -13,6 +30,8 @@ export interface VistaJugador {
   readonly totalCartasDesarrollo: number;
   readonly caballerosJugados: number;
   readonly puntos: number;
+  /** Puntos por categoría; las cartas de punto de victoria solo las ve su dueño (o todos al final). */
+  readonly desglose: DesglosePuntosVista;
   /** Solo la mano del observador; `null` en las ajenas y para el espectador. */
   readonly recursos: Readonly<Record<Recurso, number>> | null;
   readonly cartasDesarrollo: readonly CartaDesarrollo[] | null;
@@ -61,6 +80,7 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
       totalCartasDesarrollo: j.cartasDesarrollo.length + j.cartasCompradasEsteTurno.length,
       caballerosJugados: j.caballerosJugados,
       puntos: puntosDe(estado, j.id, { incluirOcultos }),
+      desglose: desgloseVisible(desglosePuntos(estado, j.id), incluirOcultos),
       recursos: esYo ? { ...j.recursos } : null,
       cartasDesarrollo: esYo ? [...j.cartasDesarrollo, ...j.cartasCompradasEsteTurno] : null,
     };

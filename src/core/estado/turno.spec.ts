@@ -26,8 +26,8 @@ describe('TIRAR_DADOS', () => {
     const r = decidir(mesa, estado, tirar(b));
     if (!r.ok) throw new Error(r.motivo);
     const dados = tirarDados(estado.config.semillaAzar, estado.tiradas);
-    // Con un 7 no hay producción y `medio` quedaría vacío: la primera tirada de la semilla 'PRUEBA'
-    // (la de `mesaDePrueba`) no es 7. Si cambia la semilla o el azar, este aviso falla primero.
+    // Con un 7 no hay producción y `medio` quedaría vacío: la primera tirada de la semillaAzar de
+    // `mesaDePrueba` ('AZAR-PRUEBA') no es 7. Si cambia la semilla o el azar, este aviso falla primero.
     expect(dados[0] + dados[1], 'la tirada de la semilla de prueba no debe ser 7').not.toBe(7);
     expect(r.eventos[0]).toEqual({ tipo: 'DADOS_TIRADOS', jugador: b, dados, causa: 'VOLUNTARIA' });
     expect(r.eventos.at(-1)).toEqual({
@@ -98,7 +98,7 @@ describe('TIRAR_DADOS', () => {
       if (x + y === 7) semillaConSiete = `sem-${i}`;
     }
     if (semillaConSiete === null) throw new Error('No se halló una semilla que sume 7');
-    const m = mesaDePrueba({ jugadores: 3, semilla: semillaConSiete });
+    const m = mesaDePrueba({ jugadores: 3, semillaAzar: semillaConSiete });
     const partida = crearPartida(m, ['a', 'b', 'c']);
     const j0 = partida.jugadores[0]!.id;
     const estado = conCambios(partida, {
