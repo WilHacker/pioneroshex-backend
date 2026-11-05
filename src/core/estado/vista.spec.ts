@@ -120,6 +120,8 @@ describe('vistaPara', () => {
     expect(Object.keys(vista.config).toSorted()).toEqual(
       [
         'jugadores',
+        // Público a propósito: dice cómo salen los dados, no qué sale (eso depende de semillaAzar).
+        'modoDados',
         'puntosVictoria',
         'radio',
         'robberHandLimit',

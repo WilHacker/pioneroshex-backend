@@ -9,6 +9,11 @@ export type TurnRuleMode = 'A' | 'B';
 
 const MODOS: ReadonlySet<string> = new Set<TurnRuleMode>(['A', 'B']);
 
+/** AZAR: cada tirada es independiente. EQUILIBRADO: en cada 36 tiradas sale cada combinación una vez. */
+export type ModoDados = 'AZAR' | 'EQUILIBRADO';
+
+const MODOS_DADOS: ReadonlySet<string> = new Set<ModoDados>(['AZAR', 'EQUILIBRADO']);
+
 /** Hasta aquí se juega en el mapa clásico (radio 2). Más jugadores, mapa más grande. */
 const JUGADORES_MAPA_CLASICO = 4;
 const RADIO_CLASICO = 2;
@@ -35,6 +40,8 @@ export interface GameConfig {
   readonly robberHandLimit: number;
   /** Puntos de victoria necesarios para ganar la partida. */
   readonly puntosVictoria: number;
+  /** Cómo salen los dados. */
+  readonly modoDados: ModoDados;
 }
 
 /**
@@ -74,6 +81,7 @@ export function crearGameConfig(entrada: GameConfigEntrada): GameConfig {
       entrada.robberHandLimit ??
       (esMapaGrande && turnRuleMode === 'A' ? LIMITE_MANO_MODO_A_GRANDE : LIMITE_MANO_CLASICO),
     puntosVictoria: entrada.puntosVictoria ?? PUNTOS_VICTORIA_CLASICO,
+    modoDados: entrada.modoDados ?? 'AZAR',
   };
 
   validar(config);
@@ -100,6 +108,9 @@ function validar(config: GameConfig): void {
   }
   if (!MODOS.has(config.turnRuleMode)) {
     throw new Error(`turnRuleMode debe ser 'A' o 'B', no '${String(config.turnRuleMode)}'`);
+  }
+  if (!MODOS_DADOS.has(config.modoDados)) {
+    throw new Error(`modoDados debe ser 'AZAR' o 'EQUILIBRADO', no '${String(config.modoDados)}'`);
   }
   if (!Number.isInteger(config.radio) || config.radio < 0) {
     throw new Error(`El radio debe ser un entero de 0 en adelante, no ${config.radio}`);

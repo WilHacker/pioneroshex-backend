@@ -20,6 +20,24 @@ const terminar = (jugador: string) => ({ tipo: 'TERMINAR_TURNO' as const, jugado
 const edificiosDe = (m: typeof mesa, dueno: string): Record<string, Edificio> =>
   Object.fromEntries(m.mapa.vertices.map((v) => [v.id, { dueno, tipo: 'POBLADO' as const }]));
 
+describe('TIRAR_DADOS con dados equilibrados', () => {
+  it('usa el modo de la configuración de la partida', () => {
+    const equilibrada = mesaDePrueba({ jugadores: 3, modoDados: 'EQUILIBRADO' });
+    const estado = conCambios(crearPartida(equilibrada, ['a', 'b', 'c']), {
+      fase: 'PRE_TIRADA',
+      pasoPreparacion: 6,
+      tiradas: 5,
+    });
+    const jugador = estado.jugadores[estado.turnoDe]!.id;
+    const r = decidir(equilibrada, estado, tirar(jugador));
+    if (!r.ok) throw new Error(r.motivo);
+    const evento = r.eventos.find((e) => e.tipo === 'DADOS_TIRADOS');
+    expect(evento).toMatchObject({
+      dados: tirarDados(estado.config.semillaAzar, 5, 'EQUILIBRADO'),
+    });
+  });
+});
+
 describe('TIRAR_DADOS', () => {
   it('emite DADOS_TIRADOS, la producción y pasa a FASE_PRINCIPAL en ese orden', () => {
     const estado = conCambios(preTirada, { turnoDe: 1, edificios: edificiosDe(mesa, b) });

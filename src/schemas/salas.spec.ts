@@ -26,6 +26,10 @@ describe('esquemas de sala', () => {
     expect(esquemaEmpezar.safeParse({ puntosVictoria: 2 }).success).toBe(false);
     expect(esquemaEmpezar.safeParse({ puntosVictoria: 99 }).success).toBe(false);
     expect(esquemaEmpezar.safeParse({ turnRuleMode: 'Z' }).success).toBe(false);
+    expect(esquemaEmpezar.parse({ modoDados: 'EQUILIBRADO' })).toEqual({
+      modoDados: 'EQUILIBRADO',
+    });
+    expect(esquemaEmpezar.safeParse({ modoDados: 'TRAMPA' }).success).toBe(false);
     expect(esquemaEmpezar.safeParse({ semillaAzar: 'x' }).success).toBe(false);
   });
 });

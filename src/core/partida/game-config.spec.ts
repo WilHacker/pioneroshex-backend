@@ -12,6 +12,7 @@ describe('crearGameConfig', () => {
       turnRuleMode: 'A',
       robberHandLimit: 7,
       puntosVictoria: 10,
+      modoDados: 'AZAR',
     });
   });
 
@@ -49,6 +50,7 @@ describe('crearGameConfig', () => {
       turnRuleMode: 'B',
       robberHandLimit: 8,
       puntosVictoria: 8,
+      modoDados: 'EQUILIBRADO',
     });
     expect(config).toEqual({
       semillaMapa: 'X',
@@ -58,7 +60,24 @@ describe('crearGameConfig', () => {
       turnRuleMode: 'B',
       robberHandLimit: 8,
       puntosVictoria: 8,
+      modoDados: 'EQUILIBRADO',
     });
+  });
+
+  it('los dados son al azar por defecto y se pueden equilibrar', () => {
+    const base = { semillaMapa: 'X', semillaAzar: 'AZAR-X' };
+    expect(crearGameConfig(base).modoDados).toBe('AZAR');
+    expect(crearGameConfig({ ...base, modoDados: 'EQUILIBRADO' }).modoDados).toBe('EQUILIBRADO');
+  });
+
+  it('rechaza un modo de dados desconocido', () => {
+    expect(() =>
+      crearGameConfig({
+        semillaMapa: 'X',
+        semillaAzar: 'AZAR-X',
+        modoDados: 'TRAMPA' as unknown as 'AZAR',
+      }),
+    ).toThrow(/modoDados/);
   });
 
   it('respeta los puntos de victoria fijados', () => {

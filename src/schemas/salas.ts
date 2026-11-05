@@ -20,6 +20,7 @@ export const esquemaUnirse = z.strictObject({ nombre });
 export const esquemaEmpezar = z.strictObject({
   puntosVictoria: z.number().int().min(PUNTOS_VICTORIA_MIN).max(PUNTOS_VICTORIA_MAX).optional(),
   turnRuleMode: z.enum(['A', 'B']).optional(),
+  modoDados: z.enum(['AZAR', 'EQUILIBRADO']).optional(),
   semillaMapa: z.string().trim().min(1).max(SEMILLA_MAX).optional(),
 });
 

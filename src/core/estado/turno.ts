@@ -14,7 +14,7 @@ export function decidirTirada(
   if (accion.tipo !== 'TIRAR_DADOS' || estado.fase !== 'PRE_TIRADA') {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
   }
-  const dados = tirarDados(estado.config.semillaAzar, estado.tiradas);
+  const dados = tirarDados(estado.config.semillaAzar, estado.tiradas, estado.config.modoDados);
   const suma = dados[0] + dados[1];
 
   if (suma === 7) {
