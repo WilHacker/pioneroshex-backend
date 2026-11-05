@@ -144,12 +144,87 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
       estado.pasoPreparacion = evento.pasoPreparacion;
       return;
     case 'TURNO_TERMINADO':
-      jugadorDe(estado, evento.jugador);
+      for (const j of estado.jugadores) {
+        if (j.cartasCompradasEsteTurno.length > 0) {
+          j.cartasDesarrollo.push(...j.cartasCompradasEsteTurno);
+          j.cartasCompradasEsteTurno = [];
+        }
+      }
+      estado.cartaJugadaEsteTurno = false;
       estado.turnoDe = evento.siguiente;
       estado.fase = 'PRE_TIRADA';
       estado.dados = null;
       estado.turnoEspecialDe = null;
       estado.tratos = [];
+      return;
+    case 'CARTA_DESARROLLO_COMPRADA': {
+      const jugador = jugadorDe(estado, evento.jugador);
+      pagar(estado, jugador, evento.costo);
+      estado.mazo.shift();
+      if (evento.carta !== null) {
+        jugador.cartasCompradasEsteTurno.push(evento.carta);
+      }
+      return;
+    }
+    case 'CABALLERO_JUGADO': {
+      const jugador = jugadorDe(estado, evento.jugador);
+      const idx = jugador.cartasDesarrollo.indexOf('CABALLERO');
+      if (idx !== -1) {
+        jugador.cartasDesarrollo.splice(idx, 1);
+      }
+      jugador.caballerosJugados += 1;
+      estado.cartaJugadaEsteTurno = true;
+      estado.ladron = { ...evento.destino };
+      return;
+    }
+    case 'CONSTRUCCION_CARRETERAS_JUGADA': {
+      const jugador = jugadorDe(estado, evento.jugador);
+      const idx = jugador.cartasDesarrollo.indexOf('CONSTRUCCION_CARRETERAS');
+      if (idx !== -1) {
+        jugador.cartasDesarrollo.splice(idx, 1);
+      }
+      for (const arista of evento.aristas) {
+        estado.caminos[arista] = evento.jugador;
+        jugador.piezasRestantes.caminos -= 1;
+      }
+      estado.cartaJugadaEsteTurno = true;
+      return;
+    }
+    case 'ABUNDANCIA_JUGADA': {
+      const jugador = jugadorDe(estado, evento.jugador);
+      const idx = jugador.cartasDesarrollo.indexOf('ABUNDANCIA');
+      if (idx !== -1) {
+        jugador.cartasDesarrollo.splice(idx, 1);
+      }
+      for (const recurso of evento.recursos) {
+        jugador.recursos[recurso] += 1;
+        estado.banco[recurso] -= 1;
+      }
+      estado.cartaJugadaEsteTurno = true;
+      return;
+    }
+    case 'MONOPOLIO_JUGADO': {
+      const beneficiario = jugadorDe(estado, evento.jugador);
+      const idx = beneficiario.cartasDesarrollo.indexOf('MONOPOLIO');
+      if (idx !== -1) {
+        beneficiario.cartasDesarrollo.splice(idx, 1);
+      }
+      for (const rival of estado.jugadores) {
+        if (rival.id !== evento.jugador) {
+          const cantidad = rival.recursos[evento.recurso];
+          rival.recursos[evento.recurso] = 0;
+          beneficiario.recursos[evento.recurso] += cantidad;
+        }
+      }
+      estado.cartaJugadaEsteTurno = true;
+      return;
+    }
+    case 'GRAN_EJERCITO_CAMBIADO':
+      estado.granEjercito = evento.nuevoTitular;
+      return;
+    case 'GRAN_RUTA_CAMBIADA':
+      estado.granRuta = evento.nuevoTitular;
+      estado.longitudGranRuta = evento.longitud;
       return;
     case 'PARTIDA_GANADA':
       jugadorDe(estado, evento.jugador);

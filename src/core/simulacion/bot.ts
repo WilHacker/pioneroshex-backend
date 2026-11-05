@@ -6,6 +6,11 @@ import type { Rng } from '../reglas/azar.js';
 const PRIORIDAD: readonly Accion['tipo'][] = [
   'CONSTRUIR_CIUDAD',
   'CONSTRUIR_POBLADO',
+  'JUGAR_CABALLERO',
+  'JUGAR_CONSTRUCCION_CARRETERAS',
+  'JUGAR_ABUNDANCIA',
+  'JUGAR_MONOPOLIO',
+  'COMPRAR_CARTA_DESARROLLO',
   'CONSTRUIR_CAMINO',
 ];
 /** Probabilidad, en %, de terminar el turno antes aunque se pueda construir. */

@@ -33,6 +33,11 @@ const accionesDe = (jugador: string): Accion[] => [
     entrega: { OVEJA: 1 },
     pide: { MADERA: 1 },
   },
+  { tipo: 'COMPRAR_CARTA_DESARROLLO', jugador },
+  { tipo: 'JUGAR_CABALLERO', jugador, destino: mesa.tablero.casillas[0]!.hex, victima: null },
+  { tipo: 'JUGAR_CONSTRUCCION_CARRETERAS', jugador, aristas: [arista] },
+  { tipo: 'JUGAR_ABUNDANCIA', jugador, recursos: ['MADERA', 'TRIGO'] },
+  { tipo: 'JUGAR_MONOPOLIO', jugador, recurso: 'TRIGO' },
   { tipo: 'PASAR_CONSTRUCCION_ESPECIAL', jugador },
   { tipo: 'TERMINAR_TURNO', jugador },
 ];
@@ -59,7 +64,7 @@ describe('decidir: comprobaciones generales', () => {
 
   it('todos los tipos de acción tienen manejador', () => {
     const tipos = accionesDe(j0).map((a) => a.tipo);
-    expect(tipos).toHaveLength(18);
+    expect(tipos).toHaveLength(23);
     expect(Object.keys(manejadores).toSorted()).toEqual(tipos.toSorted());
     for (const tipo of tipos) expect(manejadores[tipo]).toBeTypeOf('function');
   });

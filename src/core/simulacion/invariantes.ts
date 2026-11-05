@@ -88,6 +88,30 @@ function turnoYGanador(estado: Estado): string[] {
   return violaciones;
 }
 
+function granEjercitoCoherente(estado: Estado): string[] {
+  if (estado.granEjercito === null) return [];
+  const titular = estado.jugadores.find((j) => j.id === estado.granEjercito);
+  if (!titular) return [`GRAN_EJERCITO_TITULAR_INEXISTENTE:${estado.granEjercito}`];
+  if (titular.caballerosJugados < 3) {
+    return [`GRAN_EJERCITO_INSUFICIENTE:${titular.id}:${titular.caballerosJugados}`];
+  }
+  const superado = estado.jugadores.find((j) => j.caballerosJugados > titular.caballerosJugados);
+  if (superado) {
+    return [`GRAN_EJERCITO_SUPERADO:${titular.id}:${superado.id}`];
+  }
+  return [];
+}
+
+function granRutaCoherente(estado: Estado): string[] {
+  if (estado.granRuta === null) return [];
+  const titular = estado.jugadores.find((j) => j.id === estado.granRuta);
+  if (!titular) return [`GRAN_RUTA_TITULAR_INEXISTENTE:${estado.granRuta}`];
+  if (estado.longitudGranRuta < 5) {
+    return [`GRAN_RUTA_LONGITUD_INSUFICIENTE:${titular.id}:${estado.longitudGranRuta}`];
+  }
+  return [];
+}
+
 /** Lista de violaciones de las invariantes del estado; vacía si todo cuadra. No muta nada. */
 export function verificarInvariantes(mesa: Mesa, estado: Estado): readonly string[] {
   return [
@@ -97,5 +121,7 @@ export function verificarInvariantes(mesa: Mesa, estado: Estado): readonly strin
     ...sinEdificiosVecinos(mesa, estado),
     ...caminosConectados(mesa, estado),
     ...turnoYGanador(estado),
+    ...granEjercitoCoherente(estado),
+    ...granRutaCoherente(estado),
   ];
 }

@@ -21,7 +21,9 @@ const idsDe = (n: number) => Array.from({ length: n }, (_, i) => `j${i}`);
 function comprobarFinal(config: GameConfig, estado: Estado): void {
   expect(estado.fase).toBe('FIN');
   expect(estado.ganador).not.toBeNull();
-  expect(puntosDe(estado, estado.ganador!)).toBeGreaterThanOrEqual(config.puntosVictoria);
+  expect(puntosDe(estado, estado.ganador!, { incluirOcultos: true })).toBeGreaterThanOrEqual(
+    config.puntosVictoria,
+  );
   expect(verificarInvariantes(crearMesa(config), estado)).toEqual([]);
 }
 

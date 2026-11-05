@@ -7,6 +7,13 @@ import {
   decidirRechazarTrato,
 } from './comercio-jugadores.js';
 import { decidirConstruccion } from './construccion.js';
+import {
+  decidirComprarCarta,
+  decidirJugarAbundancia,
+  decidirJugarCaballero,
+  decidirJugarConstruccionCarreteras,
+  decidirJugarMonopolio,
+} from './desarrollo.js';
 import { decidirDescarte } from './descarte.js';
 import { decidirLadrón, decidirSaltoInactividad } from './ladron.js';
 import type { Mesa } from './mesa.js';
@@ -34,6 +41,11 @@ export const manejadores: Readonly<Record<Accion['tipo'], Manejador>> = {
   RECHAZAR_TRATO: (_mesa, estado, accion) => decidirRechazarTrato(estado, accion),
   CANCELAR_TRATO: (_mesa, estado, accion) => decidirCancelarTrato(estado, accion),
   CONTRAOFERTAR_TRATO: (_mesa, estado, accion) => decidirContraofertarTrato(estado, accion),
+  COMPRAR_CARTA_DESARROLLO: decidirComprarCarta,
+  JUGAR_CABALLERO: decidirJugarCaballero,
+  JUGAR_CONSTRUCCION_CARRETERAS: decidirJugarConstruccionCarreteras,
+  JUGAR_ABUNDANCIA: decidirJugarAbundancia,
+  JUGAR_MONOPOLIO: decidirJugarMonopolio,
   PASAR_CONSTRUCCION_ESPECIAL: decidirPasarConstruccionEspecial,
   TERMINAR_TURNO: decidirFinDeTurno,
 };

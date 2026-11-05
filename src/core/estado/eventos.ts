@@ -19,6 +19,24 @@ export function eventosPara(
         recurso: null,
       };
     }
+    if (evento.tipo === 'CARTA_DESARROLLO_COMPRADA') {
+      if (observador !== null && observador === evento.jugador) {
+        return { ...evento };
+      }
+      return {
+        ...evento,
+        carta: null,
+      };
+    }
+    if (evento.tipo === 'CABALLERO_JUGADO') {
+      if (observador !== null && (observador === evento.jugador || observador === evento.victima)) {
+        return { ...evento };
+      }
+      return {
+        ...evento,
+        recursoRobado: null,
+      };
+    }
     return { ...evento };
   });
 }

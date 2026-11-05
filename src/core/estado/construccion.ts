@@ -1,6 +1,7 @@
 import { COSTOS, type Costo, type LimitesDePiezas, type Pieza } from '../reglas/costos.js';
 import type { Recurso } from '../reglas/recursos.js';
 import { puedeColocarCamino, puedeColocarPoblado } from './conectividad.js';
+import { evaluarGranRuta } from './gran-ruta.js';
 import type { Mesa } from './mesa.js';
 import { puntosDe } from './puntos.js';
 import type { Accion, Decision, Estado, Evento, ResultadoRegla } from './tipos.js';
@@ -82,9 +83,10 @@ function colocacion(accion: AccionConstruir, costo: Costo): Evento {
 }
 
 /** Poblado y ciudad suman 1 punto; si con eso se alcanza la meta, la partida se gana. */
-function victoria(estado: Estado, accion: AccionConstruir): Evento[] {
-  if (accion.tipo === 'CONSTRUIR_CAMINO') return [];
-  const puntos = puntosDe(estado, accion.jugador) + 1;
+function victoria(estado: Estado, accion: AccionConstruir, puntosExtra = 0): Evento[] {
+  const puntosPorEdificio = accion.tipo === 'CONSTRUIR_CAMINO' ? 0 : 1;
+  const puntos =
+    puntosDe(estado, accion.jugador, { incluirOcultos: true }) + puntosPorEdificio + puntosExtra;
   return puntos >= estado.config.puntosVictoria
     ? [{ tipo: 'PARTIDA_GANADA', jugador: accion.jugador, puntos }]
     : [];
@@ -107,5 +109,49 @@ export function decidirConstruccion(mesa: Mesa, estado: Estado, accion: Accion):
   if (falta) return { ok: false, motivo: 'RECURSOS_INSUFICIENTES', falta };
   const posicion = validarPosicion(mesa, estado, accion);
   if (!posicion.ok) return posicion;
-  return { ok: true, eventos: [colocacion(accion, { ...costo }), ...victoria(estado, accion)] };
+
+  const eventos: Evento[] = [colocacion(accion, { ...costo })];
+  let puntosExtra = 0;
+
+  if (accion.tipo === 'CONSTRUIR_CAMINO') {
+    const estadoSimulado: Estado = {
+      ...estado,
+      caminos: { ...estado.caminos, [accion.arista]: accion.jugador },
+    };
+    const resRuta = evaluarGranRuta(mesa, estadoSimulado);
+    if (resRuta.titular !== estado.granRuta) {
+      eventos.push({
+        tipo: 'GRAN_RUTA_CAMBIADA',
+        titularAnterior: estado.granRuta,
+        nuevoTitular: resRuta.titular,
+        longitud: resRuta.longitud,
+      });
+      if (resRuta.titular === accion.jugador) puntosExtra += 2;
+      if (estado.granRuta === accion.jugador && resRuta.titular !== accion.jugador)
+        puntosExtra -= 2;
+    }
+  } else if (accion.tipo === 'CONSTRUIR_POBLADO') {
+    const estadoSimulado: Estado = {
+      ...estado,
+      edificios: {
+        ...estado.edificios,
+        [accion.vertice]: { dueno: accion.jugador, tipo: 'POBLADO' },
+      },
+    };
+    const resRuta = evaluarGranRuta(mesa, estadoSimulado);
+    if (resRuta.titular !== estado.granRuta) {
+      eventos.push({
+        tipo: 'GRAN_RUTA_CAMBIADA',
+        titularAnterior: estado.granRuta,
+        nuevoTitular: resRuta.titular,
+        longitud: resRuta.longitud,
+      });
+      if (resRuta.titular === accion.jugador) puntosExtra += 2;
+      if (estado.granRuta === accion.jugador && resRuta.titular !== accion.jugador)
+        puntosExtra -= 2;
+    }
+  }
+
+  eventos.push(...victoria(estado, accion, puntosExtra));
+  return { ok: true, eventos };
 }

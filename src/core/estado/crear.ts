@@ -1,5 +1,6 @@
 import { crearRng, mezclar } from '../reglas/azar.js';
 import { limitesDePiezas } from '../reglas/costos.js';
+import { crearMazo } from '../reglas/mazo.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import type { Mesa } from './mesa.js';
 import type { Estado, Jugador, JugadorId } from './tipos.js';
@@ -32,6 +33,9 @@ export function crearPartida(mesa: Mesa, ids: readonly JugadorId[]): Estado {
     id,
     recursos: porRecurso(0),
     piezasRestantes: { ...limitesDePiezas(config.jugadores) },
+    cartasDesarrollo: [],
+    cartasCompradasEsteTurno: [],
+    caballerosJugados: 0,
   }));
   // ponytail: banco provisional 19 × ceil(jugadores/4); confirmar con el reglamento oficial.
   const banco = porRecurso(
@@ -50,6 +54,11 @@ export function crearPartida(mesa: Mesa, ids: readonly JugadorId[]): Estado {
     edificios: {},
     caminos: {},
     banco,
+    mazo: crearMazo(config.jugadores, config.semillaAzar),
+    granEjercito: null,
+    granRuta: null,
+    longitudGranRuta: 0,
+    cartaJugadaEsteTurno: false,
     ladron: mesa.tablero.ladron,
     dados: null,
     tiradas: 0,

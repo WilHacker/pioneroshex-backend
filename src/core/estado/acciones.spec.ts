@@ -27,6 +27,11 @@ const TIPOS: readonly Accion['tipo'][] = [
   'RECHAZAR_TRATO',
   'CANCELAR_TRATO',
   'CONTRAOFERTAR_TRATO',
+  'COMPRAR_CARTA_DESARROLLO',
+  'JUGAR_CABALLERO',
+  'JUGAR_CONSTRUCCION_CARRETERAS',
+  'JUGAR_ABUNDANCIA',
+  'JUGAR_MONOPOLIO',
   'PASAR_CONSTRUCCION_ESPECIAL',
   'TERMINAR_TURNO',
 ];
@@ -82,6 +87,26 @@ function todasLasCandidatas(mesa: Mesa, jugador: JugadorId): Accion[] {
       entrega: { OVEJA: 1 },
       pide: { MADERA: 1 },
     },
+    { tipo: 'COMPRAR_CARTA_DESARROLLO', jugador },
+    ...mesa.mapa.casillas.flatMap((c): Accion[] => [
+      { tipo: 'JUGAR_CABALLERO', jugador, destino: c, victima: null },
+      ...Array.from({ length: mesa.config.jugadores }, (_, i) => `j${i}`)
+        .filter((id) => id !== jugador)
+        .map((victima): Accion => ({ tipo: 'JUGAR_CABALLERO', jugador, destino: c, victima })),
+    ]),
+    ...aristas.map((arista): Accion => ({
+      tipo: 'JUGAR_CONSTRUCCION_CARRETERAS',
+      jugador,
+      aristas: [arista],
+    })),
+    ...RECURSOS.flatMap((r1) =>
+      RECURSOS.map((r2): Accion => ({
+        tipo: 'JUGAR_ABUNDANCIA',
+        jugador,
+        recursos: [r1, r2],
+      })),
+    ),
+    ...RECURSOS.map((recurso): Accion => ({ tipo: 'JUGAR_MONOPOLIO', jugador, recurso })),
     { tipo: 'PASAR_CONSTRUCCION_ESPECIAL', jugador },
     { tipo: 'TERMINAR_TURNO', jugador },
   ];
@@ -294,6 +319,11 @@ describe('accionesDisponibles: ayuda por tipo', () => {
       RECHAZAR_TRATO: 'TRATO_INEXISTENTE',
       CANCELAR_TRATO: 'TRATO_INEXISTENTE',
       CONTRAOFERTAR_TRATO: 'TRATO_INEXISTENTE',
+      COMPRAR_CARTA_DESARROLLO: 'RECURSOS_INSUFICIENTES',
+      JUGAR_CABALLERO: 'NO_TIENES_ESA_CARTA',
+      JUGAR_CONSTRUCCION_CARRETERAS: 'NO_TIENES_ESA_CARTA',
+      JUGAR_ABUNDANCIA: 'NO_TIENES_ESA_CARTA',
+      JUGAR_MONOPOLIO: 'NO_TIENES_ESA_CARTA',
       PASAR_CONSTRUCCION_ESPECIAL: 'FASE_INCORRECTA',
       TERMINAR_TURNO: 'OK',
     });

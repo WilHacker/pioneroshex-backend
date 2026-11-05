@@ -214,6 +214,112 @@ describe('evolucionar', () => {
       });
       expect(estadoPasado.turnoEspecialDe).toBe(2);
     });
+
+    it('eventos de cartas de desarrollo, gran ejército y gran ruta', () => {
+      // CARTA_DESARROLLO_COMPRADA
+      const conMazo = conCambios(base, { mazo: ['CABALLERO', 'MONOPOLIO'] });
+      const comp = evolucionarSinMutar(conMazo, {
+        tipo: 'CARTA_DESARROLLO_COMPRADA',
+        jugador: j0,
+        carta: 'CABALLERO',
+        costo: COSTOS.CARTA,
+      });
+      expect(comp.mazo).toEqual(['MONOPOLIO']);
+      expect(yo(comp).cartasCompradasEsteTurno).toEqual(['CABALLERO']);
+      expect(yo(comp).recursos.OVEJA).toBe(4);
+      expect(yo(comp).recursos.TRIGO).toBe(4);
+      expect(yo(comp).recursos.MINERAL).toBe(4);
+
+      // TURNO_TERMINADO transfiere cartas compradas a cartas jugables
+      const finTurno = evolucionarSinMutar(comp, {
+        tipo: 'TURNO_TERMINADO',
+        jugador: j0,
+        siguiente: 1,
+      });
+      expect(yo(finTurno).cartasCompradasEsteTurno).toEqual([]);
+      expect(yo(finTurno).cartasDesarrollo).toEqual(['CABALLERO']);
+      expect(finTurno.cartaJugadaEsteTurno).toBe(false);
+
+      // CABALLERO_JUGADO
+      const jugCaballero = evolucionarSinMutar(finTurno, {
+        tipo: 'CABALLERO_JUGADO',
+        jugador: j0,
+        destino: { q: 1, r: -1, s: 0 },
+        victima: null,
+        recursoRobado: null,
+      });
+      expect(yo(jugCaballero).cartasDesarrollo).toEqual([]);
+      expect(yo(jugCaballero).caballerosJugados).toBe(1);
+      expect(jugCaballero.cartaJugadaEsteTurno).toBe(true);
+      expect(jugCaballero.ladron).toEqual({ q: 1, r: -1, s: 0 });
+
+      // GRAN_EJERCITO_CAMBIADO
+      const granEj = evolucionarSinMutar(jugCaballero, {
+        tipo: 'GRAN_EJERCITO_CAMBIADO',
+        titularAnterior: null,
+        nuevoTitular: j0,
+        caballeros: 3,
+      });
+      expect(granEj.granEjercito).toBe(j0);
+
+      // ABUNDANCIA_JUGADA
+      const conAbundancia = produce(base, (b) => {
+        b.jugadores[0]!.cartasDesarrollo = ['ABUNDANCIA'];
+      });
+      const jugAbundancia = evolucionarSinMutar(conAbundancia, {
+        tipo: 'ABUNDANCIA_JUGADA',
+        jugador: j0,
+        recursos: ['MADERA', 'MINERAL'],
+      });
+      expect(yo(jugAbundancia).cartasDesarrollo).toEqual([]);
+      expect(yo(jugAbundancia).recursos.MADERA).toBe(6);
+      expect(yo(jugAbundancia).recursos.MINERAL).toBe(6);
+      expect(jugAbundancia.banco.MADERA).toBe(base.banco.MADERA - 1);
+
+      // MONOPOLIO_JUGADO
+      const conMonopolio = produce(base, (b) => {
+        b.jugadores[0]!.cartasDesarrollo = ['MONOPOLIO'];
+        b.jugadores[1]!.recursos.TRIGO = 3;
+        b.jugadores[2]!.recursos.TRIGO = 2;
+        b.jugadores[3]!.recursos.TRIGO = 0;
+      });
+      const jugMonopolio = evolucionarSinMutar(conMonopolio, {
+        tipo: 'MONOPOLIO_JUGADO',
+        jugador: j0,
+        recurso: 'TRIGO',
+        cantidadRobada: 5,
+      });
+      expect(yo(jugMonopolio).cartasDesarrollo).toEqual([]);
+      expect(yo(jugMonopolio).recursos.TRIGO).toBe(base.jugadores[0]!.recursos.TRIGO + 5);
+      expect(jugMonopolio.jugadores[1]!.recursos.TRIGO).toBe(0);
+      expect(jugMonopolio.jugadores[2]!.recursos.TRIGO).toBe(0);
+
+      // CONSTRUCCION_CARRETERAS_JUGADA
+      const arista1 = mesa.mapa.aristas[0]!.id;
+      const arista2 = mesa.mapa.aristas[1]!.id;
+      const conCarreteras = produce(base, (b) => {
+        b.jugadores[0]!.cartasDesarrollo = ['CONSTRUCCION_CARRETERAS'];
+      });
+      const jugCarreteras = evolucionarSinMutar(conCarreteras, {
+        tipo: 'CONSTRUCCION_CARRETERAS_JUGADA',
+        jugador: j0,
+        aristas: [arista1, arista2],
+      });
+      expect(yo(jugCarreteras).cartasDesarrollo).toEqual([]);
+      expect(jugCarreteras.caminos[arista1]).toBe(j0);
+      expect(jugCarreteras.caminos[arista2]).toBe(j0);
+      expect(yo(jugCarreteras).piezasRestantes.caminos).toBe(yo(base).piezasRestantes.caminos - 2);
+
+      // GRAN_RUTA_CAMBIADA
+      const granRut = evolucionarSinMutar(jugCarreteras, {
+        tipo: 'GRAN_RUTA_CAMBIADA',
+        titularAnterior: null,
+        nuevoTitular: j0,
+        longitud: 5,
+      });
+      expect(granRut.granRuta).toBe(j0);
+      expect(granRut.longitudGranRuta).toBe(5);
+    });
   });
 
   it('un jugador inexistente lanza un error claro', () => {

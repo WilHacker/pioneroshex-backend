@@ -1,6 +1,7 @@
 import type { Hex } from '../mapa/coordenadas.js';
 import type { GameConfig } from '../partida/game-config.js';
 import type { Costo, LimitesDePiezas } from '../reglas/costos.js';
+import type { CartaDesarrollo } from '../reglas/mazo.js';
 import type { Recurso } from '../reglas/recursos.js';
 
 export type JugadorId = string;
@@ -31,6 +32,9 @@ export interface Jugador {
   readonly id: JugadorId;
   readonly recursos: Readonly<Record<Recurso, number>>;
   readonly piezasRestantes: LimitesDePiezas;
+  readonly cartasDesarrollo: readonly CartaDesarrollo[];
+  readonly cartasCompradasEsteTurno: readonly CartaDesarrollo[];
+  readonly caballerosJugados: number;
 }
 export interface Estado {
   readonly config: GameConfig;
@@ -45,6 +49,11 @@ export interface Estado {
   readonly edificios: Readonly<Record<string, Edificio>>; // por id de vértice
   readonly caminos: Readonly<Record<string, JugadorId>>; // por id de arista
   readonly banco: Readonly<Record<Recurso, number>>;
+  readonly mazo: readonly CartaDesarrollo[];
+  readonly granEjercito: JugadorId | null;
+  readonly granRuta: JugadorId | null;
+  readonly longitudGranRuta: number;
+  readonly cartaJugadaEsteTurno: boolean;
   readonly ladron: Hex | null;
   readonly dados: readonly [number, number] | null;
   readonly tiradas: number;
@@ -81,6 +90,15 @@ export type Accion =
       pide: Partial<Record<Recurso, number>>;
     }
   | { tipo: 'PASAR_CONSTRUCCION_ESPECIAL'; jugador: JugadorId }
+  | { tipo: 'COMPRAR_CARTA_DESARROLLO'; jugador: JugadorId }
+  | { tipo: 'JUGAR_CABALLERO'; jugador: JugadorId; destino: Hex; victima: JugadorId | null }
+  | {
+      tipo: 'JUGAR_CONSTRUCCION_CARRETERAS';
+      jugador: JugadorId;
+      aristas: readonly [string] | readonly [string, string];
+    }
+  | { tipo: 'JUGAR_ABUNDANCIA'; jugador: JugadorId; recursos: readonly [Recurso, Recurso] }
+  | { tipo: 'JUGAR_MONOPOLIO'; jugador: JugadorId; recurso: Recurso }
   | { tipo: 'TERMINAR_TURNO'; jugador: JugadorId };
 export type Origen = 'PREPARACION' | 'CONSTRUCCION';
 export interface FuenteProduccion {
@@ -148,6 +166,47 @@ export type Evento =
       jugador: JugadorId;
       siguienteConstructor: number | null;
     }
+  | {
+      tipo: 'CARTA_DESARROLLO_COMPRADA';
+      jugador: JugadorId;
+      carta: CartaDesarrollo | null;
+      costo: Costo;
+    }
+  | {
+      tipo: 'CABALLERO_JUGADO';
+      jugador: JugadorId;
+      destino: Hex;
+      victima: JugadorId | null;
+      recursoRobado: Recurso | null;
+    }
+  | {
+      tipo: 'CONSTRUCCION_CARRETERAS_JUGADA';
+      jugador: JugadorId;
+      aristas: readonly string[];
+    }
+  | {
+      tipo: 'ABUNDANCIA_JUGADA';
+      jugador: JugadorId;
+      recursos: readonly [Recurso, Recurso];
+    }
+  | {
+      tipo: 'MONOPOLIO_JUGADO';
+      jugador: JugadorId;
+      recurso: Recurso;
+      cantidadRobada: number;
+    }
+  | {
+      tipo: 'GRAN_EJERCITO_CAMBIADO';
+      titularAnterior: JugadorId | null;
+      nuevoTitular: JugadorId;
+      caballeros: number;
+    }
+  | {
+      tipo: 'GRAN_RUTA_CAMBIADA';
+      titularAnterior: JugadorId | null;
+      nuevoTitular: JugadorId | null;
+      longitud: number;
+    }
   | { tipo: 'FASE_CAMBIADA'; fase: Fase; turnoDe: number; pasoPreparacion: number }
   | { tipo: 'TURNO_TERMINADO'; jugador: JugadorId; siguiente: number }
   | { tipo: 'PARTIDA_GANADA'; jugador: JugadorId; puntos: number };
@@ -186,7 +245,12 @@ export type MotivoAccion =
   | 'INTERCAMBIO_SOLAPADO'
   | 'TRATO_NO_DIRIGIDO_A_TI'
   | 'YA_RECHAZADO'
-  | 'NO_PUEDES_COMERCIAR';
+  | 'NO_PUEDES_COMERCIAR'
+  | 'MAZO_AGOTADO'
+  | 'NO_TIENES_ESA_CARTA'
+  | 'CARTA_COMPRADA_ESTE_TURNO'
+  | 'YA_JUGASTE_CARTA_ESTE_TURNO'
+  | 'ARISTAS_INVALIDAS';
 export interface Rechazo {
   readonly ok: false;
   readonly motivo: MotivoAccion;

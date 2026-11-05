@@ -65,4 +65,49 @@ describe('eventosPara: filtrado de eventos privados por observador', () => {
     eventosPara(eventos, 'j2');
     expect(JSON.stringify(eventos)).toBe(original);
   });
+
+  it('oculta la carta comprada a terceros pero la muestra al comprador', () => {
+    const compra: readonly Evento[] = [
+      {
+        tipo: 'CARTA_DESARROLLO_COMPRADA',
+        jugador: 'j0',
+        carta: 'PUNTO_VICTORIA',
+        costo: { OVEJA: 1, TRIGO: 1, MINERAL: 1 },
+      },
+    ];
+    expect(eventosPara(compra, 'j0')[0]).toEqual(compra[0]);
+    expect(eventosPara(compra, 'j1')[0]).toEqual({
+      tipo: 'CARTA_DESARROLLO_COMPRADA',
+      jugador: 'j0',
+      carta: null,
+      costo: { OVEJA: 1, TRIGO: 1, MINERAL: 1 },
+    });
+    expect(eventosPara(compra, null)[0]).toEqual({
+      tipo: 'CARTA_DESARROLLO_COMPRADA',
+      jugador: 'j0',
+      carta: null,
+      costo: { OVEJA: 1, TRIGO: 1, MINERAL: 1 },
+    });
+  });
+
+  it('oculta recursoRobado en CABALLERO_JUGADO a observadores no involucrados', () => {
+    const caballero: readonly Evento[] = [
+      {
+        tipo: 'CABALLERO_JUGADO',
+        jugador: 'j0',
+        destino: { q: 0, r: 0, s: 0 },
+        victima: 'j1',
+        recursoRobado: 'MINERAL',
+      },
+    ];
+    expect(eventosPara(caballero, 'j0')[0]).toEqual(caballero[0]);
+    expect(eventosPara(caballero, 'j1')[0]).toEqual(caballero[0]);
+    expect(eventosPara(caballero, 'j2')[0]).toEqual({
+      tipo: 'CABALLERO_JUGADO',
+      jugador: 'j0',
+      destino: { q: 0, r: 0, s: 0 },
+      victima: 'j1',
+      recursoRobado: null,
+    });
+  });
 });

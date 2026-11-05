@@ -1,6 +1,7 @@
 import type { Hex } from '../mapa/coordenadas.js';
 import type { GameConfig } from '../partida/game-config.js';
 import type { LimitesDePiezas } from '../reglas/costos.js';
+import type { CartaDesarrollo } from '../reglas/mazo.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { puntosDe } from './puntos.js';
 import type { Estado, Fase, JugadorId } from './tipos.js';
@@ -9,9 +10,12 @@ export interface VistaJugador {
   readonly id: JugadorId;
   readonly piezasRestantes: LimitesDePiezas;
   readonly totalCartas: number;
+  readonly totalCartasDesarrollo: number;
+  readonly caballerosJugados: number;
   readonly puntos: number;
   /** Solo la mano del observador; `null` en las ajenas y para el espectador. */
   readonly recursos: Readonly<Record<Recurso, number>> | null;
+  readonly cartasDesarrollo: readonly CartaDesarrollo[] | null;
 }
 
 export interface Vista {
@@ -27,6 +31,10 @@ export interface Vista {
   readonly edificios: Estado['edificios'];
   readonly caminos: Estado['caminos'];
   readonly banco: Estado['banco'];
+  readonly tamanoMazo: number;
+  readonly granEjercito: JugadorId | null;
+  readonly granRuta: JugadorId | null;
+  readonly longitudGranRuta: number;
   readonly ladron: Hex | null;
   readonly dados: Estado['dados'];
   readonly descartesPendientes: Estado['descartesPendientes'];
@@ -43,13 +51,20 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
     throw new Error(`El jugador "${jugadorId}" no participa en la partida`);
   }
   const { semillaAzar: _oculta, ...configPublica } = estado.config;
-  const jugadores = estado.jugadores.map((j): VistaJugador => ({
-    id: j.id,
-    piezasRestantes: { ...j.piezasRestantes },
-    totalCartas: RECURSOS.reduce((total, r) => total + j.recursos[r], 0),
-    puntos: puntosDe(estado, j.id),
-    recursos: j.id === jugadorId ? { ...j.recursos } : null,
-  }));
+  const jugadores = estado.jugadores.map((j): VistaJugador => {
+    const esYo = j.id === jugadorId;
+    const incluirOcultos = esYo || estado.fase === 'FIN';
+    return {
+      id: j.id,
+      piezasRestantes: { ...j.piezasRestantes },
+      totalCartas: RECURSOS.reduce((total, r) => total + j.recursos[r], 0),
+      totalCartasDesarrollo: j.cartasDesarrollo.length + j.cartasCompradasEsteTurno.length,
+      caballerosJugados: j.caballerosJugados,
+      puntos: puntosDe(estado, j.id, { incluirOcultos }),
+      recursos: esYo ? { ...j.recursos } : null,
+      cartasDesarrollo: esYo ? [...j.cartasDesarrollo, ...j.cartasCompradasEsteTurno] : null,
+    };
+  });
   return {
     config: configPublica,
     yo: jugadorId,
@@ -69,6 +84,10 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
     edificios: Object.fromEntries(Object.entries(estado.edificios).map(([v, e]) => [v, { ...e }])),
     caminos: { ...estado.caminos },
     banco: { ...estado.banco },
+    tamanoMazo: estado.mazo.length,
+    granEjercito: estado.granEjercito,
+    granRuta: estado.granRuta,
+    longitudGranRuta: estado.longitudGranRuta,
     ladron: estado.ladron && { ...estado.ladron },
     dados: estado.dados && [estado.dados[0], estado.dados[1]],
     descartesPendientes: { ...estado.descartesPendientes },

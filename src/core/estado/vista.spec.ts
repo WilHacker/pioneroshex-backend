@@ -98,8 +98,12 @@ describe('vistaPara', () => {
         'edificios',
         'fase',
         'ganador',
+        'granEjercito',
+        'granRuta',
         'jugadores',
         'ladron',
+        'longitudGranRuta',
+        'tamanoMazo',
         'tratos',
         'turnoDe',
         'turnoEspecialDe',
@@ -119,7 +123,16 @@ describe('vistaPara', () => {
       ].toSorted(),
     );
     expect(Object.keys(vista.jugadores[0] ?? {}).toSorted()).toEqual(
-      ['id', 'piezasRestantes', 'puntos', 'recursos', 'totalCartas'].toSorted(),
+      [
+        'caballerosJugados',
+        'cartasDesarrollo',
+        'id',
+        'piezasRestantes',
+        'puntos',
+        'recursos',
+        'totalCartas',
+        'totalCartasDesarrollo',
+      ].toSorted(),
     );
   });
 

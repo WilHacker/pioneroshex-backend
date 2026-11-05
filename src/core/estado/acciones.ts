@@ -1,5 +1,6 @@
 import type { Costo } from '../reglas/costos.js';
-import { RECURSOS } from '../reglas/recursos.js';
+import { RECURSOS, type Recurso } from '../reglas/recursos.js';
+import { puedeColocarCamino } from './conectividad.js';
 import { decidir } from './decidir.js';
 import type { Mesa } from './mesa.js';
 import type { Accion, Estado, JugadorId, MotivoAccion, Rechazo } from './tipos.js';
@@ -69,6 +70,130 @@ const moverLadron: Candidatas = (mesa, jugador, estado) => {
   });
 };
 
+const PARES_RECURSOS: readonly (readonly [Recurso, Recurso])[] = RECURSOS.flatMap((r1) =>
+  RECURSOS.map((r2) => [r1, r2] as const),
+);
+
+const jugarCaballero: Candidatas = (mesa, jugador, estado) => {
+  if (!estado) {
+    return mesa.mapa.casillas.map((c): Accion => ({
+      tipo: 'JUGAR_CABALLERO',
+      jugador,
+      destino: c,
+      victima: null,
+    }));
+  }
+  return mesa.mapa.casillas.flatMap((c): Accion[] => {
+    const cClave = `${c.q},${c.r},${c.s}`;
+    const vertices = mesa.mapa.vertices.filter((v) =>
+      v.casillas.some((cas) => `${cas.q},${cas.r},${cas.s}` === cClave),
+    );
+    const rivalesConCartas = Array.from(
+      new Set(
+        vertices
+          .map((v) => estado.edificios[v.id]?.dueno)
+          .filter((id): id is JugadorId => Boolean(id && id !== jugador)),
+      ),
+    ).filter((rId) => {
+      const rJug = estado.jugadores.find((j) => j.id === rId);
+      return rJug && RECURSOS.some((rec) => rJug.recursos[rec] > 0);
+    });
+
+    if (rivalesConCartas.length > 0) {
+      return rivalesConCartas.map((victima): Accion => ({
+        tipo: 'JUGAR_CABALLERO',
+        jugador,
+        destino: c,
+        victima,
+      }));
+    }
+    return [{ tipo: 'JUGAR_CABALLERO', jugador, destino: c, victima: null }];
+  });
+};
+
+const jugarAbundancia: Candidatas = (_mesa, jugador, estado) => {
+  if (
+    estado &&
+    (!estado.jugadores.find((j) => j.id === jugador)?.cartasDesarrollo.includes('ABUNDANCIA') ||
+      estado.cartaJugadaEsteTurno)
+  ) {
+    return [{ tipo: 'JUGAR_ABUNDANCIA', jugador, recursos: ['MADERA', 'TRIGO'] }];
+  }
+  return PARES_RECURSOS.map((recursos) => ({
+    tipo: 'JUGAR_ABUNDANCIA',
+    jugador,
+    recursos,
+  }));
+};
+
+const jugarMonopolio: Candidatas = (_mesa, jugador, estado) => {
+  if (
+    estado &&
+    (!estado.jugadores.find((j) => j.id === jugador)?.cartasDesarrollo.includes('MONOPOLIO') ||
+      estado.cartaJugadaEsteTurno)
+  ) {
+    return [{ tipo: 'JUGAR_MONOPOLIO', jugador, recurso: 'TRIGO' }];
+  }
+  return RECURSOS.map((recurso) => ({
+    tipo: 'JUGAR_MONOPOLIO',
+    jugador,
+    recurso,
+  }));
+};
+
+const jugarConstruccionCarreteras: Candidatas = (mesa, jugador, estado) => {
+  if (!estado) {
+    return mesa.mapa.aristas.map((a): Accion => ({
+      tipo: 'JUGAR_CONSTRUCCION_CARRETERAS',
+      jugador,
+      aristas: [a.id],
+    }));
+  }
+  const j = estado.jugadores.find((jug) => jug.id === jugador);
+  if (
+    !j ||
+    !j.cartasDesarrollo.includes('CONSTRUCCION_CARRETERAS') ||
+    estado.cartaJugadaEsteTurno ||
+    estado.fase !== 'FASE_PRINCIPAL' ||
+    j.piezasRestantes.caminos === 0
+  ) {
+    return [
+      { tipo: 'JUGAR_CONSTRUCCION_CARRETERAS', jugador, aristas: [mesa.mapa.aristas[0]!.id] },
+    ];
+  }
+
+  const aristasValidas1 = mesa.mapa.aristas
+    .filter((a) => !estado.caminos[a.id])
+    .filter((a) => puedeColocarCamino(mesa, estado, jugador, a.id).ok)
+    .map((a) => a.id);
+
+  const candidatas: Accion[] = [];
+  for (const a1 of aristasValidas1) {
+    candidatas.push({ tipo: 'JUGAR_CONSTRUCCION_CARRETERAS', jugador, aristas: [a1] });
+    if (j.piezasRestantes.caminos >= 2) {
+      const estadoConA1: Estado = {
+        ...estado,
+        caminos: { ...estado.caminos, [a1]: jugador },
+      };
+      const aristasValidas2 = mesa.mapa.aristas
+        .filter((a) => a.id !== a1 && !estadoConA1.caminos[a.id])
+        .filter((a) => puedeColocarCamino(mesa, estadoConA1, jugador, a.id).ok)
+        .map((a) => a.id);
+
+      for (const a2 of aristasValidas2) {
+        candidatas.push({
+          tipo: 'JUGAR_CONSTRUCCION_CARRETERAS',
+          jugador,
+          aristas: [a1, a2],
+        });
+      }
+    }
+  }
+  return candidatas.length > 0
+    ? candidatas
+    : [{ tipo: 'JUGAR_CONSTRUCCION_CARRETERAS', jugador, aristas: [mesa.mapa.aristas[0]!.id] }];
+};
+
 /** Candidatas por tipo (cada vértice o arista del mapa); el orden fija el de la respuesta. */
 const CANDIDATAS: Record<Accion['tipo'], Candidatas> = {
   COLOCAR_POBLADO_INICIAL: porVertice('COLOCAR_POBLADO_INICIAL'),
@@ -131,6 +256,11 @@ const CANDIDATAS: Record<Accion['tipo'], Candidatas> = {
           },
         ];
   },
+  COMPRAR_CARTA_DESARROLLO: (_mesa, jugador) => [{ tipo: 'COMPRAR_CARTA_DESARROLLO', jugador }],
+  JUGAR_CABALLERO: jugarCaballero,
+  JUGAR_CONSTRUCCION_CARRETERAS: jugarConstruccionCarreteras,
+  JUGAR_ABUNDANCIA: jugarAbundancia,
+  JUGAR_MONOPOLIO: jugarMonopolio,
   PASAR_CONSTRUCCION_ESPECIAL: (_mesa, jugador) => [
     { tipo: 'PASAR_CONSTRUCCION_ESPECIAL', jugador },
   ],
@@ -179,6 +309,11 @@ const ALCANCE: Readonly<Record<MotivoAccion, 'general' | 'lugar'>> = {
   TRATO_NO_DIRIGIDO_A_TI: 'general',
   YA_RECHAZADO: 'general',
   NO_PUEDES_COMERCIAR: 'general',
+  MAZO_AGOTADO: 'general',
+  NO_TIENES_ESA_CARTA: 'general',
+  CARTA_COMPRADA_ESTE_TURNO: 'general',
+  YA_JUGASTE_CARTA_ESTE_TURNO: 'general',
+  ARISTAS_INVALIDAS: 'lugar',
 };
 
 interface Evaluacion {
