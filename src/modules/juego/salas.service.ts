@@ -18,7 +18,7 @@ import type {
   RepositorioSalas,
   SalaGuardada,
 } from '../../infra/salas/repositorio-salas.js';
-import type { EmpezarEntrada } from '../../schemas/salas.js';
+import type { CambiarSalaEntrada, EmpezarEntrada } from '../../schemas/salas.js';
 import type { PartidaActor } from './partida-actor.js';
 import { crearIdDeSala, LimiteDePartidasError, type PartidasService } from './partidas.service.js';
 
@@ -42,6 +42,24 @@ export interface SalaPublica {
   readonly empezada: boolean;
   readonly anfitrion: string;
   readonly jugadores: readonly { readonly id: string; readonly nombre: string }[];
+  readonly publica: boolean;
+  readonly opciones: Readonly<Record<string, unknown>>;
+}
+
+/** Una fila de la lista de salas abiertas: solo lo que hace falta para decidir si entrar. */
+export interface SalaAbierta {
+  readonly id: string;
+  readonly anfitrion: string;
+  readonly jugadores: number;
+  readonly maximo: number;
+}
+
+const SALAS_ABIERTAS_MAX = 50;
+
+export interface ResumenDeSalas {
+  readonly salasAbiertas: number;
+  readonly partidasEnCurso: number;
+  readonly jugadores: number;
 }
 
 export interface Credencial {
@@ -56,6 +74,8 @@ interface SalaViva {
   readonly anfitrion: string;
   readonly jugadores: readonly JugadorDeSala[];
   readonly partidaId: string | null;
+  readonly publica: boolean;
+  readonly opciones: Readonly<Record<string, unknown>>;
 }
 
 const hashDe = (token: string): string => createHash('sha256').update(token).digest('hex');
@@ -95,13 +115,20 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     clearInterval(this.temporizador);
   }
 
-  async crear(nombre: string): Promise<Credencial> {
+  async crear(nombre: string, publica = false): Promise<Credencial> {
     if (this.salas.size >= this.limiteSalas) {
       throw new ServiceUnavailableException('Hay demasiadas salas abiertas, prueba más tarde');
     }
     const id = crearIdDeSala((candidato) => this.salas.has(candidato));
     const { jugador, token } = this.nuevoJugador(1, nombre);
-    const sala: SalaViva = { id, anfitrion: jugador.id, jugadores: [jugador], partidaId: null };
+    const sala: SalaViva = {
+      id,
+      anfitrion: jugador.id,
+      jugadores: [jugador],
+      partidaId: null,
+      publica,
+      opciones: {},
+    };
     this.salas.set(id, sala);
     await this.guardar(sala, null);
     return { salaId: id, jugadorId: jugador.id, token };
@@ -127,7 +154,51 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
       empezada: sala.partidaId !== null,
       anfitrion: sala.anfitrion,
       jugadores: sala.jugadores.map((j) => ({ id: j.id, nombre: j.nombre })),
+      publica: sala.publica,
+      opciones: sala.opciones,
     };
+  }
+
+  /** Las salas públicas que aún esperan jugadores. Sin ids de jugador ni tokens. */
+  abiertas(): SalaAbierta[] {
+    const lista: SalaAbierta[] = [];
+    for (const sala of this.salas.values()) {
+      if (!sala.publica || sala.partidaId !== null) continue;
+      lista.push({
+        id: sala.id,
+        anfitrion: sala.jugadores.find((j) => j.id === sala.anfitrion)?.nombre ?? '',
+        jugadores: sala.jugadores.length,
+        maximo: JUGADORES_MAX,
+      });
+    }
+    return lista.slice(0, SALAS_ABIERTAS_MAX);
+  }
+
+  /** El anfitrión cambia la visibilidad y las reglas mientras la sala espera. */
+  async cambiar(salaId: string, token: string, cambios: CambiarSalaEntrada): Promise<void> {
+    const sala = this.requerirAnfitrion(salaId, token);
+    if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
+    const { publica, ...reglas } = cambios;
+    const nueva: SalaViva = {
+      ...sala,
+      publica: publica ?? sala.publica,
+      opciones: { ...sala.opciones, ...reglas },
+    };
+    this.salas.set(salaId, nueva);
+    await this.guardar(nueva, null);
+  }
+
+  /** Números sueltos para la portada: nada de ids, nombres ni tokens. */
+  resumen(): ResumenDeSalas {
+    let salasAbiertas = 0;
+    let partidasEnCurso = 0;
+    let jugadores = 0;
+    for (const sala of this.salas.values()) {
+      if (sala.partidaId === null) salasAbiertas += 1;
+      else partidasEnCurso += 1;
+      jugadores += sala.jugadores.length;
+    }
+    return { salasAbiertas, partidasEnCurso, jugadores };
   }
 
   /** Quién es el dueño del token en esa sala, o `undefined` si no es de nadie. */
@@ -149,17 +220,12 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   }
 
   async empezar(salaId: string, token: string, opciones: EmpezarEntrada): Promise<void> {
-    const sala = this.requerir(salaId);
-    const jugadorId = this.autenticar(salaId, token);
-    if (jugadorId === undefined) throw new UnauthorizedException('Token inválido');
-    if (jugadorId !== sala.anfitrion) {
-      throw new ForbiddenException('Solo el anfitrión puede empezar la partida');
-    }
+    const sala = this.requerirAnfitrion(salaId, token);
     if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
     if (sala.jugadores.length < JUGADORES_MIN) {
       throw new ConflictException(`Hacen falta al menos ${JUGADORES_MIN} jugadores`);
     }
-    const { id: partidaId, actor } = this.crearPartida(sala, opciones);
+    const { id: partidaId, actor } = this.crearPartida(sala, { ...sala.opciones, ...opciones });
     const nueva: SalaViva = { ...sala, partidaId };
     this.salas.set(salaId, nueva);
     await this.guardar(nueva, actor.estado);
@@ -197,6 +263,17 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   private requerir(salaId: string): SalaViva {
     const sala = this.salas.get(salaId);
     if (!sala) throw new NotFoundException('La sala no existe');
+    return sala;
+  }
+
+  /** La sala, si el token es válido y es el del anfitrión; si no, 401 o 403. */
+  private requerirAnfitrion(salaId: string, token: string): SalaViva {
+    const sala = this.requerir(salaId);
+    const jugadorId = this.autenticar(salaId, token);
+    if (jugadorId === undefined) throw new UnauthorizedException('Token inválido');
+    if (jugadorId !== sala.anfitrion) {
+      throw new ForbiddenException('Solo el anfitrión puede cambiar o empezar la partida');
+    }
     return sala;
   }
 
@@ -298,6 +375,8 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
       anfitrion: g.anfitrion,
       jugadores: g.jugadores,
       partidaId: estado !== null ? partidaId : null,
+      publica: g.publica ?? false,
+      opciones: g.opciones ?? {},
     });
     this.ultimas.set(g.id, this.ahora());
   }

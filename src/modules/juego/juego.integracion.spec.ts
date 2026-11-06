@@ -96,6 +96,16 @@ describe('API HTTP de salas', () => {
     expect(salas.partida(a.salaId)?.estado.config.puntosVictoria).toBe(5);
   });
 
+  it('GET /salas/resumen da solo números', async () => {
+    const respuesta = await request(url).get('/salas/resumen').expect(200);
+
+    expect(Object.keys(respuesta.body as object).toSorted()).toEqual([
+      'jugadores',
+      'partidasEnCurso',
+      'salasAbiertas',
+    ]);
+  });
+
   it('valida el cuerpo (400), la sala (404) y el token (401/403)', async () => {
     await request(url).post('/salas').send({ nombre: '' }).expect(400);
     await request(url).post('/salas').send({ nombre: 'Ana', extra: 1 }).expect(400);
@@ -121,7 +131,59 @@ describe('API HTTP de salas', () => {
   });
 });
 
+describe('Salas públicas y opciones por HTTP', () => {
+  it('crear pública, listarla, cambiar reglas con el token y verlas en la sala', async () => {
+    const creada = await request(url).post('/salas').send({ nombre: 'Ana', publica: true });
+    const { salaId, token } = creada.body as Credencial;
+
+    const lista = await request(url).get('/salas').expect(200);
+    expect((lista.body as { id: string }[]).some((s) => s.id === salaId)).toBe(true);
+
+    await request(url).patch(`/salas/${salaId}`).send({ puntosVictoria: 12 }).expect(401);
+    await request(url)
+      .patch(`/salas/${salaId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ puntosVictoria: 12, modoDados: 'EQUILIBRADO', publica: false })
+      .expect(204);
+    await request(url)
+      .patch(`/salas/${salaId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ puntosVictoria: 99 })
+      .expect(400);
+
+    const sala = await request(url).get(`/salas/${salaId}`).expect(200);
+    expect(sala.body).toMatchObject({
+      publica: false,
+      opciones: { puntosVictoria: 12, modoDados: 'EQUILIBRADO' },
+    });
+    const despues = await request(url).get('/salas').expect(200);
+    expect((despues.body as { id: string }[]).some((s) => s.id === salaId)).toBe(false);
+  });
+});
+
 describe('Límite de peticiones HTTP', () => {
+  it('no limita las lecturas: la sala de espera consulta cada pocos segundos', async () => {
+    const modulo = await Test.createTestingModule({ imports: [JuegoModule] })
+      .overrideProvider(RepositorioSalas)
+      .useValue(new RepositorioSalasMemoria())
+      .overrideProvider(OPCIONES_LIMITE_HTTP)
+      .useValue({ maximo: 1 })
+      .compile();
+    const limitada = modulo.createNestApplication();
+    await limitada.listen(0, '127.0.0.1');
+    const direccion = limitada.getHttpServer().address() as AddressInfo;
+    const base = `http://127.0.0.1:${direccion.port}`;
+    try {
+      const { salaId } = (await request(base).post('/salas').send({ nombre: 'Ana' }))
+        .body as Credencial;
+      for (let i = 0; i < 5; i += 1) {
+        await request(base).get(`/salas/${salaId}`).expect(200);
+        await request(base).get('/salas').expect(200);
+      }
+    } finally {
+      await limitada.close();
+    }
+  });
   it('responde 429 cuando una dirección pasa del máximo', async () => {
     const modulo = await Test.createTestingModule({ imports: [JuegoModule] })
       .overrideProvider(RepositorioSalas)

@@ -7,6 +7,8 @@ const sala: SalaGuardada = {
   anfitrion: 'j1',
   jugadores: [{ id: 'j1', nombre: 'Ana', tokenHash: 'h' }],
   partidaId: null,
+  publica: false,
+  opciones: {},
   estado: null,
   actualizadaEn: 5,
 };

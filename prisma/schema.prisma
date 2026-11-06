@@ -20,6 +20,8 @@ model Sala {
   anfitrion     String
   jugadores     Json
   partidaId     String?
+  publica       Boolean  @default(false)
+  opciones      Json     @default("{}")
   estado        Json?
   actualizadaEn DateTime
 

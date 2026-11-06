@@ -13,6 +13,10 @@ export interface SalaGuardada {
   readonly anfitrion: string;
   readonly jugadores: readonly JugadorDeSala[];
   readonly partidaId: string | null;
+  /** Se ve en la lista de salas abiertas. */
+  readonly publica: boolean;
+  /** Reglas elegidas en la sala de espera; se aplican al empezar. */
+  readonly opciones: Readonly<Record<string, unknown>>;
   readonly estado: Estado | null;
   /** Milisegundos desde la época. */
   readonly actualizadaEn: number;

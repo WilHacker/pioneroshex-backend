@@ -20,6 +20,8 @@ export class RepositorioSalasPrisma extends RepositorioSalas {
       anfitrion: sala.anfitrion,
       jugadores: sala.jugadores as unknown as Prisma.InputJsonValue,
       partidaId: sala.partidaId,
+      publica: sala.publica,
+      opciones: sala.opciones as unknown as Prisma.InputJsonValue,
       estado:
         sala.estado === null ? Prisma.JsonNull : (sala.estado as unknown as Prisma.InputJsonValue),
       actualizadaEn: new Date(sala.actualizadaEn),
@@ -38,6 +40,8 @@ export class RepositorioSalasPrisma extends RepositorioSalas {
       anfitrion: fila.anfitrion,
       jugadores: fila.jugadores as unknown as JugadorDeSala[],
       partidaId: fila.partidaId,
+      publica: fila.publica,
+      opciones: (fila.opciones ?? {}) as Record<string, unknown>,
       estado: fila.estado as unknown as Estado | null,
       actualizadaEn: fila.actualizadaEn.getTime(),
     }));

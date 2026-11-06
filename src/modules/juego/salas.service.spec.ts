@@ -48,6 +48,8 @@ describe('SalasService: crear y unirse', () => {
       empezada: false,
       anfitrion: 'j1',
       jugadores: [{ id: 'j1', nombre: 'Ana' }],
+      publica: false,
+      opciones: {},
     });
   });
 
@@ -277,5 +279,19 @@ describe('SalasService: barrer', () => {
     expect(() => salas.estado(a.salaId)).toThrow(HttpException);
     expect(partidas.cantidad).toBe(0);
     expect(await repo.cargarTodas()).toEqual([]);
+  });
+});
+
+describe('SalasService: resumen', () => {
+  it('cuenta las salas abiertas, las partidas en curso y los jugadores', async () => {
+    const { salas } = crear();
+    expect(salas.resumen()).toEqual({ salasAbiertas: 0, partidasEnCurso: 0, jugadores: 0 });
+
+    const a = await salas.crear('Ana');
+    await salas.unirse(a.salaId, 'Beto');
+    await salas.crear('Cleo');
+    await salas.empezar(a.salaId, a.token, {});
+
+    expect(salas.resumen()).toEqual({ salasAbiertas: 1, partidasEnCurso: 1, jugadores: 3 });
   });
 });

@@ -34,6 +34,8 @@ describe('Salas guardadas en PostgreSQL (e2e)', () => {
       anfitrion: 'j1',
       jugadores: [{ id: 'j1', nombre: 'Ana', tokenHash: 'abc' }],
       partidaId: null,
+      publica: false,
+      opciones: {},
       estado: null,
       actualizadaEn: 1_700_000_000_000,
     };
