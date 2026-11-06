@@ -311,6 +311,21 @@ describe('Socket del juego', () => {
     socket.disconnect();
   });
 
+  it('al entrar y en cada aviso llega `reloj` (null si la sala no tiene límite de tiempo)', async () => {
+    const { a, b } = await partidaEmpezada();
+    const uno = await conectar({ salaId: a.salaId, token: a.token });
+    const dos = await conectar({ salaId: a.salaId, token: b.token });
+    const turno = uno.inicio!.vista.turnoDe!;
+    const enTurno = turno === 'j1' ? uno : dos;
+    const vertice = uno.inicio!.mesa.vertices[0]!.id;
+
+    expect(uno.inicio).toHaveProperty('reloj', null);
+    const aviso = esperar<{ reloj: number | null }>(enTurno.socket, 'juego:notificacion');
+    await accion(enTurno.socket, { tipo: 'COLOCAR_POBLADO_INICIAL', vertice });
+
+    expect(await aviso).toHaveProperty('reloj', null);
+  });
+
   it('una acción válida llega a todos con su propia vista; el cliente no fija el jugador', async () => {
     const { a, b } = await partidaEmpezada();
     const uno = await conectar({ salaId: a.salaId, token: a.token });
@@ -326,6 +341,52 @@ describe('Socket del juego', () => {
     expect((await aviso1).vista.yo).toBe(turno);
     expect((await aviso2).vista.yo).not.toBe(turno);
   });
+
+  it('con 10 jugadores una jugada llega a los 10, cada uno con su vista y sin ver cartas ajenas', async () => {
+    const dueno = (await request(url).post('/salas').send({ nombre: 'J1' })).body as Credencial;
+    const demas = await Promise.all(
+      Array.from(
+        { length: 9 },
+        async (_, i) =>
+          (
+            await request(url)
+              .post(`/salas/${dueno.salaId}/unirse`)
+              .send({ nombre: `J${i + 2}` })
+          ).body as Credencial,
+      ),
+    );
+    await request(url)
+      .post(`/salas/${dueno.salaId}/empezar`)
+      .set('Authorization', `Bearer ${dueno.token}`)
+      .send({ turnRuleMode: 'B' })
+      .expect(204);
+
+    const conexiones = await Promise.all(
+      [dueno, ...demas].map((c) => conectar({ salaId: c.salaId, token: c.token })),
+    );
+    const turno = conexiones[0]!.inicio!.vista.turnoDe!;
+    const enTurno = conexiones.find((c) => c.inicio!.vista.yo === turno)!;
+    const vertice = enTurno.inicio!.sitios.poblados[0]!;
+
+    const avisos = conexiones.map((c) =>
+      esperar<{ vista: { yo: string; jugadores: { id: string; recursos: unknown }[] } }>(
+        c.socket,
+        'juego:notificacion',
+      ),
+    );
+    expect(await accion(enTurno.socket, { tipo: 'COLOCAR_POBLADO_INICIAL', vertice })).toEqual({
+      ok: true,
+    });
+    const recibidos = await Promise.all(avisos);
+
+    expect(new Set(recibidos.map((r) => r.vista.yo)).size).toBe(10);
+    for (const r of recibidos) {
+      expect(r.vista.jugadores).toHaveLength(10);
+      // Solo se ve la propia mano: la de los rivales llega oculta.
+      const reveladas = r.vista.jugadores.filter((j) => j.recursos !== null).map((j) => j.id);
+      expect(reveladas).toEqual([r.vista.yo]);
+    }
+  }, 30_000);
 
   it('rechaza lo mal formado, los campos de más y lo que no toca', async () => {
     const { a, b } = await partidaEmpezada();

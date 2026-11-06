@@ -73,8 +73,10 @@ export class JuegoGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.rechazar(socket, 'PARTIDA_NO_EMPEZADA');
       return;
     }
+    // `reloj` es lo que le queda al jugador que debe actuar (null si no hay límite). Va en milisegundos
+    // restantes y no como hora, para que un reloj de cliente desajustado no importe.
     const baja = actor.suscribir(jugadorId, (notificacion) =>
-      socket.emit(EVENTO_NOTIFICACION, notificacion),
+      socket.emit(EVENTO_NOTIFICACION, { ...notificacion, reloj: actor.restanteMs }),
     );
     this.sesiones.set(socket, {
       jugadorId,
@@ -89,6 +91,7 @@ export class JuegoGateway implements OnGatewayConnection, OnGatewayDisconnect {
       vista: actor.vista(jugadorId),
       acciones,
       sitios,
+      reloj: actor.restanteMs,
     });
   }
 

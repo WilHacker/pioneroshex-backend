@@ -19,11 +19,20 @@ export const esquemaCrearSala = z.strictObject({ nombre, publica: z.boolean().op
 export const esquemaUnirse = z.strictObject({ nombre });
 
 /** Las reglas que el anfitrión puede fijar. `semillaAzar` no está: la genera el servidor. */
+/** Segundos por turno que se pueden elegir; 0 es sin límite. */
+export const TIEMPOS_DE_TURNO = [0, 30, 60, 90, 120, 180] as const;
+
 const reglas = {
   puntosVictoria: z.number().int().min(PUNTOS_VICTORIA_MIN).max(PUNTOS_VICTORIA_MAX).optional(),
   turnRuleMode: z.enum(['A', 'B']).optional(),
   modoDados: z.enum(['AZAR', 'EQUILIBRADO']).optional(),
   robberHandLimit: z.number().int().min(LIMITE_DESCARTE_MIN).max(LIMITE_DESCARTE_MAX).optional(),
+  turnoSegundos: z
+    .number()
+    .refine((s): s is (typeof TIEMPOS_DE_TURNO)[number] => TIEMPOS_DE_TURNO.some((t) => t === s), {
+      message: `Debe ser uno de: ${TIEMPOS_DE_TURNO.join(', ')}`,
+    })
+    .optional(),
   semillaMapa: z.string().trim().min(1).max(SEMILLA_MAX).optional(),
 };
 

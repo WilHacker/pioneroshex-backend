@@ -105,6 +105,7 @@ export class PartidasService {
 
   /** Devuelve `true` si existía. */
   eliminar(id: string): boolean {
+    this.partidas.get(id)?.detener();
     return this.partidas.delete(id);
   }
 }

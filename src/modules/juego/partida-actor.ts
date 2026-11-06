@@ -24,7 +24,21 @@ export interface OpcionesActor extends OpcionesPaso {
   readonly alCambiar?: (estado: Estado) => void | Promise<void>;
   /** Reloj en milisegundos; se inyecta solo para probar. */
   readonly ahora?: () => number;
+  /**
+   * Tiempo que tiene cada jugador para actuar. Al vencer, el servidor juega por él (tira los dados,
+   * descarta, mueve el ladrón o termina el turno). Sin valor o 0, no hay límite.
+   */
+  readonly limiteTurnoMs?: number | undefined;
 }
+
+/** En la preparación no hay reloj: no existe una jugada segura que hacer por quien no coloca. */
+const FASES_CON_RELOJ: ReadonlySet<Estado['fase']> = new Set([
+  'PRE_TIRADA',
+  'DESCARTE',
+  'MOVER_LADRON',
+  'FASE_PRINCIPAL',
+  'CONSTRUCCION_ESPECIAL',
+]);
 
 export type ResultadoEnvio =
   | {
@@ -49,6 +63,9 @@ export class PartidaActor {
   private actual: Estado;
   private ultimaActividadMs: number;
   private cola: Promise<unknown> = Promise.resolve();
+  private temporizador: NodeJS.Timeout | undefined;
+  private venceEn: number | null = null;
+  private detenido = false;
   /** El tablero no cambia con las jugadas: se calcula una vez. */
   readonly mesaPublica: MesaPublica;
 
@@ -60,6 +77,7 @@ export class PartidaActor {
     this.actual = estadoInicial;
     this.ultimaActividadMs = this.ahora();
     this.mesaPublica = mesaPublica(mesa);
+    this.programarReloj();
   }
 
   get estado(): Estado {
@@ -69,6 +87,17 @@ export class PartidaActor {
   /** Última jugada aceptada, conexión o desconexión, en ms. Sirve para expirar partidas muertas. */
   get ultimaActividad(): number {
     return this.ultimaActividadMs;
+  }
+
+  /** Cuánto le queda al jugador que debe actuar, o `null` si no hay reloj ahora. */
+  get restanteMs(): number | null {
+    return this.venceEn === null ? null : Math.max(0, this.venceEn - this.ahora());
+  }
+
+  /** Apaga el reloj para siempre (la partida se descartó o el servidor se apaga). */
+  detener(): void {
+    this.detenido = true;
+    this.programarReloj();
   }
 
   /** Cuántas escuchas hay activas (sockets conectados). */
@@ -143,6 +172,8 @@ export class PartidaActor {
     if (!resultado.ok) return resultado;
     this.actual = resultado.estado;
     this.ultimaActividadMs = this.ahora();
+    // Antes de avisar: así cada notificación ya lleva el tiempo que le queda al siguiente.
+    this.programarReloj();
     this.persistir(resultado.estado);
     for (const notificacion of resultado.notificaciones) {
       // Copia a propósito: un suscriptor puede darse de baja mientras se avisa.
@@ -150,6 +181,54 @@ export class PartidaActor {
       for (const { escucha } of destinatarios) this.avisar(escucha, notificacion);
     }
     return { ok: true, estado: resultado.estado, eventosCompletos: resultado.eventosCompletos };
+  }
+
+  /** Reinicia el reloj con el tiempo completo para quien debe actuar en el estado actual. */
+  private programarReloj(): void {
+    clearTimeout(this.temporizador);
+    this.temporizador = undefined;
+    this.venceEn = null;
+    const limite = this.opciones.limiteTurnoMs;
+    if (this.detenido || !limite || limite <= 0 || !FASES_CON_RELOJ.has(this.actual.fase)) return;
+    this.venceEn = this.ahora() + limite;
+    const version = this.actual.version;
+    this.temporizador = setTimeout(() => void this.vencio(version), limite);
+    this.temporizador.unref();
+  }
+
+  /** Se acabó el tiempo: se juega por quien no actuó, con la acción que prevé el motor. */
+  private async vencio(version: number): Promise<void> {
+    // Si mientras tanto hubo una jugada, este aviso ya es viejo.
+    if (this.actual.version !== version) return;
+    try {
+      for (const accion of this.accionesPorInactividad()) {
+        // En serie a propósito: cada jugada forzada se apoya en el estado que dejó la anterior.
+        // oxlint-disable-next-line no-await-in-loop
+        const resultado = await this.enviar(accion);
+        if (!resultado.ok) {
+          this.logger.warn(`El motor rechazó la jugada por inactividad (${resultado.motivo})`);
+        }
+      }
+    } catch (error: unknown) {
+      const mensaje = error instanceof Error ? error.message || error.name : String(error);
+      this.logger.error(`Falló la jugada por inactividad: ${mensaje}`);
+    }
+    // Si nada cambió (se rechazó), se vuelve a intentar al vencer otra vez.
+    if (this.actual.version === version) this.programarReloj();
+  }
+
+  private accionesPorInactividad(): Accion[] {
+    const estado = this.actual;
+    if (estado.fase === 'DESCARTE') {
+      return Object.keys(estado.descartesPendientes).map((jugador) => ({
+        tipo: 'DESCARTE_AUTOMATICO',
+        jugador,
+      }));
+    }
+    const indice =
+      estado.fase === 'CONSTRUCCION_ESPECIAL' ? estado.turnoEspecialDe : estado.turnoDe;
+    const jugador = indice === null ? undefined : estado.jugadores[indice]?.id;
+    return jugador === undefined ? [] : [{ tipo: 'SALTAR_TURNO_POR_INACTIVIDAD', jugador }];
   }
 
   /** Un fallo al guardar se registra: la jugada ya es válida y los demás deben enterarse. */

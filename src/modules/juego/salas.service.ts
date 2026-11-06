@@ -82,6 +82,10 @@ interface SalaViva {
   readonly opciones: Readonly<Record<string, unknown>>;
 }
 
+/** Los segundos que eligió el anfitrión (o nada) como milisegundos para el actor. */
+const limiteDeTurnoMs = (segundos: unknown): number | undefined =>
+  typeof segundos === 'number' && segundos > 0 ? segundos * 1000 : undefined;
+
 const hashDe = (token: string): string => createHash('sha256').update(token).digest('hex');
 
 const mensajeDe = (error: unknown): string =>
@@ -305,11 +309,17 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     sala: SalaViva,
     opciones: EmpezarEntrada,
   ): { id: string; actor: PartidaActor } {
+    // El tiempo por turno es cosa del servidor (el actor), no una regla del motor.
+    const { turnoSegundos, ...reglas } = opciones;
     try {
       return this.partidas.crear(
         sala.jugadores.map((j) => j.id),
-        opciones,
-        () => ({ ahora: this.ahora, alCambiar: (estado) => this.guardarPorId(sala.id, estado) }),
+        reglas,
+        () => ({
+          ahora: this.ahora,
+          alCambiar: (estado) => this.guardarPorId(sala.id, estado),
+          limiteTurnoMs: limiteDeTurnoMs(turnoSegundos),
+        }),
       );
     } catch (error: unknown) {
       if (error instanceof LimiteDePartidasError) {
@@ -421,6 +431,8 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
       this.partidas.restaurar(partidaId, crearMesa(estado.config), estado, {
         ahora: this.ahora,
         alCambiar: (nuevo) => this.guardarPorId(g.id, nuevo),
+        // Tras un reinicio, quien debía actuar recibe su tiempo completo.
+        limiteTurnoMs: limiteDeTurnoMs(g.opciones?.turnoSegundos),
       });
     }
     this.salas.set(g.id, {
