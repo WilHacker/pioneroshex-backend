@@ -10,7 +10,9 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { LimiteHttpGuard } from './limite-http.guard.js';
+import { CuentasService } from '../cuentas/cuentas.service.js';
+import { OrigenGuard } from '../cuentas/origen.guard.js';
+import { LimiteHttpGuard } from '../../infra/http/limite-http.guard.js';
 import {
   esquemaCambiarSala,
   esquemaCrearSala,
@@ -35,13 +37,23 @@ function tokenDe(cabecera: string | undefined): string {
 // El límite por IP solo va en lo que escribe: la sala de espera consulta GET cada pocos segundos.
 @Controller('salas')
 export class SalasController {
-  constructor(@Inject(SalasService) private readonly salas: SalasService) {}
+  constructor(
+    @Inject(SalasService) private readonly salas: SalasService,
+    @Inject(CuentasService) private readonly cuentas: CuentasService,
+  ) {}
 
+  // Estas dos leen la cookie de sesión: el guard de origen va primero para que otra página no
+  // pueda ni gastar la cuota de peticiones de la víctima.
   @Post()
-  @UseGuards(LimiteHttpGuard)
-  crear(@Body() cuerpo: unknown): Promise<Credencial> {
+  @UseGuards(OrigenGuard, LimiteHttpGuard)
+  async crear(
+    @Body() cuerpo: unknown,
+    @Headers('cookie') cookie: string | undefined,
+  ): Promise<Credencial> {
     const { nombre, publica } = validar(esquemaCrearSala, cuerpo);
-    return this.salas.crear(nombre, publica);
+    // Con sesión iniciada, el jugador es su cuenta y se usa el nombre de la cuenta.
+    const usuario = await this.cuentas.usuarioDeCookie(cookie);
+    return this.salas.crear(usuario?.nombre ?? nombre, publica, usuario?.id);
   }
 
   // Antes de ':id' y de 'resumen' por la misma razón: el orden decide qué ruta gana.
@@ -51,9 +63,15 @@ export class SalasController {
   }
 
   @Post(':id/unirse')
-  @UseGuards(LimiteHttpGuard)
-  unirse(@Param('id') id: string, @Body() cuerpo: unknown): Promise<Credencial> {
-    return this.salas.unirse(id, validar(esquemaUnirse, cuerpo).nombre);
+  @UseGuards(OrigenGuard, LimiteHttpGuard)
+  async unirse(
+    @Param('id') id: string,
+    @Body() cuerpo: unknown,
+    @Headers('cookie') cookie: string | undefined,
+  ): Promise<Credencial> {
+    const { nombre } = validar(esquemaUnirse, cuerpo);
+    const usuario = await this.cuentas.usuarioDeCookie(cookie);
+    return this.salas.unirse(id, usuario?.nombre ?? nombre, usuario?.id);
   }
 
   // Antes de ':id', si no 'resumen' se tomaría por un id de sala.

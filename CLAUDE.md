@@ -113,6 +113,8 @@ Diseño del juego:
   y en `package.json`: mantener las dos iguales.
 - `/health` consulta la base de datos: responde 503 si cae. `test:e2e` y `smoke` necesitan Postgres.
 - Redis corre en Docker pero **aún no hay cliente** en el código.
+- ConfigModule copia lo validado a `process.env`: en pruebas con varias apps, restaurarlo (ver
+  `modules/pruebas-nest.ts` y `cuentas.integracion.spec.ts`).
 - Windows + Git Bash: `MSYS_NO_PATHCONV=1` con `docker run -w`; matar procesos por puerto con
   PowerShell y comprobar que el puerto quedó libre; `pnpm install` no regenera `src/generated/`
   si ya estaba todo instalado.
@@ -131,6 +133,17 @@ Diseño del juego:
 - Salas: `POST /salas`, `POST /salas/:id/unirse`, `GET /salas/:id`, `POST /salas/:id/empezar`
   (`Authorization: Bearer <token>`). `LimiteHttpGuard` responde **429** al pasar de 20 peticiones
   por minuto por IP (el registro de usuarios lo reutilizará).
+- Cuentas (`modules/cuentas/`): `POST /cuentas/registro`, `entrar`, `salir`, `recuperar`,
+  `contrasena`, `codigos` (regenerar), `GET /cuentas/yo`, `yo/estadisticas`, `codigos`,
+  `DELETE /cuentas/yo`. Sesión en la cookie `pioneros_sesion` (HttpOnly, SameSite=Lax); en la base
+  solo el SHA-256 del token. Contraseñas con `scrypt`; recuperación con 8 códigos de un solo uso
+  (16 caracteres). Diseño y revisión de seguridad en la nota `Diseno-Registro` del vault.
+- **Única excepción a «un módulo no importa de otro»:** `JuegoModule` importa `CuentasModule` (solo su
+  servicio de sesiones y `OrigenGuard`) para saber quién inició sesión al crear o unirse a una sala.
+- Las rutas que usan la cookie llevan `OrigenGuard` (CSRF) **antes** de `LimiteHttpGuard`.
+- Detrás de un proxy inverso hay que configurar `trust proxy` con el número exacto de saltos; sin
+  eso todos los usuarios comparten IP y el límite de peticiones se vuelve un DoS. Hoy no hay proxy.
+- `CODIGO_REGISTRO` (12 caracteres o más) cierra el registro; vacío = abierto.
 - Socket.io: `juego:accion` (con acuse) entra; `juego:inicio`, `juego:notificacion` y `juego:error`
   salen. El servidor fija `jugador` desde la sesión. Esquemas Zod en `src/schemas/`. Protocolo
   completo en la nota `Contrato-de-Red` del vault de Obsidian.

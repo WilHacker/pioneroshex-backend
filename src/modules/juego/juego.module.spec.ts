@@ -1,5 +1,5 @@
-import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
+import { moduloDePrueba } from '../pruebas-nest.js';
 import { RepositorioSalasMemoria } from '../../infra/salas/repositorio-salas.memoria.js';
 import { RepositorioSalas } from '../../infra/salas/repositorio-salas.js';
 import { JuegoModule } from './juego.module.js';
@@ -8,7 +8,7 @@ import { SalasService } from './salas.service.js';
 
 describe('JuegoModule', () => {
   it('Nest lo monta y da una única instancia de cada servicio', async () => {
-    const modulo = await Test.createTestingModule({ imports: [JuegoModule] })
+    const modulo = await moduloDePrueba([JuegoModule])
       .overrideProvider(RepositorioSalas)
       .useValue(new RepositorioSalasMemoria())
       .compile();

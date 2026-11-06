@@ -27,3 +27,70 @@ model Sala {
 
   @@map("salas")
 }
+
+/// Una cuenta. Sin correo ni datos personales. `nombreNorm` (minúsculas) es único.
+model Usuario {
+  id             String   @id
+  nombre         String
+  nombreNorm     String   @unique
+  hashContrasena String
+  creadoEn       DateTime
+
+  sesiones        Sesion[]
+  codigos         CodigoRecuperacion[]
+  participaciones Participacion[]
+
+  @@map("usuarios")
+}
+
+/// Una sesión abierta. Solo se guarda el SHA-256 del token que va en la cookie.
+model Sesion {
+  tokenHash String   @id
+  usuarioId String
+  expiraEn  DateTime
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("sesiones")
+}
+
+/// Códigos de recuperación de un solo uso (SHA-256). `usadoEn` los marca como gastados.
+model CodigoRecuperacion {
+  usuarioId String
+  hash      String
+  usadoEn   DateTime?
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, hash])
+  @@map("codigos_recuperacion")
+}
+
+/// Una partida terminada de la que se guarda el resultado. Solo si jugó alguien con cuenta.
+model Partida {
+  id             String   @id
+  terminadaEn    DateTime
+  puntosVictoria Int
+  jugadores      Int
+  ganador        String
+
+  participaciones Participacion[]
+
+  @@map("partidas")
+}
+
+/// Un jugador de una partida terminada. `usuarioId` es nulo para invitados y, si la cuenta se
+/// borra, la participación se queda sin dueño (el resultado de los demás no cambia).
+model Participacion {
+  partidaId String
+  posicion  Int
+  usuarioId String?
+  nombre    String
+  puntos    Int
+  gano      Boolean
+  partida   Partida  @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@id([partidaId, posicion])
+  @@index([usuarioId])
+  @@map("participaciones")
+}

@@ -101,7 +101,7 @@ describe('SalasService: salas abiertas', () => {
 
   it('muestra como máximo 50 salas', async () => {
     const { salas } = crear();
-    for (let i = 0; i < 52; i += 1) await salas.crear(`J${i}`, true);
+    await Promise.all(Array.from({ length: 52 }, (_, i) => salas.crear(`J${i}`, true)));
 
     expect(salas.abiertas()).toHaveLength(50);
   });

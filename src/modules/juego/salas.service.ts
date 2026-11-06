@@ -11,8 +11,10 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { crearMesa } from '../../core/estado/mesa.js';
+import { puntosDe } from '../../core/estado/puntos.js';
 import type { Estado } from '../../core/estado/tipos.js';
 import { JUGADORES_MAX, JUGADORES_MIN } from '../../core/partida/game-config.js';
+import type { RepositorioHistorial } from '../../infra/historial/repositorio-historial.js';
 import type {
   JugadorDeSala,
   RepositorioSalas,
@@ -35,6 +37,8 @@ export interface OpcionesSalas {
   /** Reloj en milisegundos; se inyecta solo para probar. */
   readonly ahora?: () => number;
   readonly limiteSalas?: number | undefined;
+  /** Dónde guardar el resultado de las partidas con jugadores que tienen cuenta. */
+  readonly historial?: RepositorioHistorial | undefined;
 }
 
 export interface SalaPublica {
@@ -93,6 +97,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   private readonly salas = new Map<string, SalaViva>();
   private readonly ahora: () => number;
   private readonly limiteSalas: number;
+  private readonly historial: RepositorioHistorial | undefined;
   private temporizador: NodeJS.Timeout | undefined;
   private escritura: Promise<unknown> = Promise.resolve();
 
@@ -103,6 +108,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   ) {
     this.ahora = opciones.ahora ?? Date.now;
     this.limiteSalas = opciones.limiteSalas ?? LIMITE_SALAS_POR_DEFECTO;
+    this.historial = opciones.historial;
   }
 
   async onModuleInit(): Promise<void> {
@@ -115,12 +121,12 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     clearInterval(this.temporizador);
   }
 
-  async crear(nombre: string, publica = false): Promise<Credencial> {
+  async crear(nombre: string, publica = false, usuarioId?: string): Promise<Credencial> {
     if (this.salas.size >= this.limiteSalas) {
       throw new ServiceUnavailableException('Hay demasiadas salas abiertas, prueba más tarde');
     }
     const id = crearIdDeSala((candidato) => this.salas.has(candidato));
-    const { jugador, token } = this.nuevoJugador(1, nombre);
+    const { jugador, token } = this.nuevoJugador(1, nombre, usuarioId);
     const sala: SalaViva = {
       id,
       anfitrion: jugador.id,
@@ -134,13 +140,16 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     return { salaId: id, jugadorId: jugador.id, token };
   }
 
-  async unirse(salaId: string, nombre: string): Promise<Credencial> {
+  async unirse(salaId: string, nombre: string, usuarioId?: string): Promise<Credencial> {
     const sala = this.requerir(salaId);
     if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
     if (sala.jugadores.length >= JUGADORES_MAX) {
       throw new ConflictException(`La sala está llena (máximo ${JUGADORES_MAX} jugadores)`);
     }
-    const { jugador, token } = this.nuevoJugador(sala.jugadores.length + 1, nombre);
+    if (usuarioId !== undefined && sala.jugadores.some((j) => j.usuarioId === usuarioId)) {
+      throw new ConflictException('Ya estás en esta sala');
+    }
+    const { jugador, token } = this.nuevoJugador(sala.jugadores.length + 1, nombre, usuarioId);
     const nueva: SalaViva = { ...sala, jugadores: [...sala.jugadores, jugador] };
     this.salas.set(salaId, nueva);
     await this.guardar(nueva, null);
@@ -277,9 +286,19 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     return sala;
   }
 
-  private nuevoJugador(numero: number, nombre: string): { jugador: JugadorDeSala; token: string } {
+  private nuevoJugador(
+    numero: number,
+    nombre: string,
+    usuarioId?: string,
+  ): { jugador: JugadorDeSala; token: string } {
     const token = randomBytes(BYTES_TOKEN).toString('base64url');
-    return { jugador: { id: `j${numero}`, nombre, tokenHash: hashDe(token) }, token };
+    const jugador: JugadorDeSala = {
+      id: `j${numero}`,
+      nombre,
+      tokenHash: hashDe(token),
+      ...(usuarioId === undefined ? {} : { usuarioId }),
+    };
+    return { jugador, token };
   }
 
   private crearPartida(
@@ -300,12 +319,46 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private guardarPorId(salaId: string, estado: Estado): Promise<void> {
-    return this.enCola(async () => {
+  private async guardarPorId(salaId: string, estado: Estado): Promise<void> {
+    await this.enCola(async () => {
       // Se mira al ejecutar, no al encolar: si la sala se barrió mientras tanto, no se resucita.
       const sala = this.salas.get(salaId);
       if (sala) await this.repositorio.guardar(this.aFila(sala, estado));
     });
+    await this.registrarSiTermino(salaId, estado);
+  }
+
+  // Salas cuyo resultado ya está en el historial (evita repetir el intento en cada jugada).
+  private readonly registradas = new Set<string>();
+
+  /**
+   * Cuando la partida tiene ganador, guarda su resultado una sola vez, y solo si jugó alguien con
+   * cuenta (de los invitados no se guarda historial). Un fallo se registra y no afecta a la partida.
+   */
+  async registrarSiTermino(salaId: string, estado: Estado): Promise<void> {
+    const { historial } = this;
+    const sala = this.salas.get(salaId);
+    if (!historial || !sala || estado.ganador === null || this.registradas.has(salaId)) return;
+    if (!sala.jugadores.some((j) => j.usuarioId !== undefined)) {
+      this.registradas.add(salaId);
+      return;
+    }
+    const ganador = estado.ganador;
+    await this.intentar(async () => {
+      await historial.registrar({
+        id: salaId,
+        terminadaEn: this.ahora(),
+        puntosVictoria: estado.config.puntosVictoria,
+        ganador: sala.jugadores.find((j) => j.id === ganador)?.nombre ?? ganador,
+        participantes: sala.jugadores.map((j) => ({
+          usuarioId: j.usuarioId ?? null,
+          nombre: j.nombre,
+          puntos: puntosDe(estado, j.id, { incluirOcultos: true }),
+          gano: j.id === ganador,
+        })),
+      });
+      this.registradas.add(salaId);
+    }, 'registrar el resultado de la partida');
   }
 
   private async guardar(sala: SalaViva, estado: Estado | null): Promise<void> {
@@ -379,5 +432,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
       opciones: g.opciones ?? {},
     });
     this.ultimas.set(g.id, this.ahora());
+    // Si el servidor se cayó justo al terminar la partida, se completa el registro al volver.
+    if (estado !== null) void this.registrarSiTermino(g.id, estado);
   }
 }

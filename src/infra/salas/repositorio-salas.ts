@@ -5,6 +5,8 @@ export interface JugadorDeSala {
   readonly nombre: string;
   /** SHA-256 del token de sesión: el token en claro solo lo tiene su jugador. */
   readonly tokenHash: string;
+  /** La cuenta de quien juega, si había iniciado sesión; los invitados no la tienen. */
+  readonly usuarioId?: string;
 }
 
 /** Lo que se guarda de una sala (con su partida si ya empezó). Es JSON puro. */

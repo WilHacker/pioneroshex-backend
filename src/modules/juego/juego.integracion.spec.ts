@@ -1,14 +1,14 @@
 import type { AddressInfo } from 'node:net';
 import type { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { io, type Socket } from 'socket.io-client';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { AdaptadorSocketIo } from '../../infra/socket/socket-io.adapter.js';
+import { moduloDePrueba } from '../pruebas-nest.js';
 import { RepositorioSalasMemoria } from '../../infra/salas/repositorio-salas.memoria.js';
 import { RepositorioSalas } from '../../infra/salas/repositorio-salas.js';
 import { JuegoModule } from './juego.module.js';
-import { OPCIONES_LIMITE_HTTP } from './limite-http.guard.js';
+import { OPCIONES_LIMITE_HTTP } from '../../infra/http/limite-http.guard.js';
 import { SalasService } from './salas.service.js';
 
 interface Credencial {
@@ -30,7 +30,7 @@ let salas: SalasService;
 const sockets: Socket[] = [];
 
 beforeAll(async () => {
-  const modulo = await Test.createTestingModule({ imports: [JuegoModule] })
+  const modulo = await moduloDePrueba([JuegoModule])
     .overrideProvider(RepositorioSalas)
     .useValue(new RepositorioSalasMemoria())
     .overrideProvider(OPCIONES_LIMITE_HTTP)
@@ -161,9 +161,77 @@ describe('Salas públicas y opciones por HTTP', () => {
   });
 });
 
+const registrar = async (nombre: string): Promise<string> => {
+  const r = await request(url)
+    .post('/cuentas/registro')
+    .send({ nombre, contrasena: 'una clave larga' })
+    .expect(201);
+  return (r.headers['set-cookie'] as unknown as string[])[0]?.split(';')[0] ?? '';
+};
+
+describe('Cuentas dentro de las salas', () => {
+  it('con sesión, el jugador es su cuenta: usa el nombre de la cuenta, no el que mande el cuerpo', async () => {
+    const cookie = await registrar('Zoe');
+
+    const creada = await request(url)
+      .post('/salas')
+      .set('Cookie', cookie)
+      .send({ nombre: 'Otro nombre' })
+      .expect(201);
+    const { salaId } = creada.body as Credencial;
+
+    const sala = await request(url).get(`/salas/${salaId}`).expect(200);
+    expect(sala.body).toMatchObject({ jugadores: [{ id: 'j1', nombre: 'Zoe' }] });
+    expect(JSON.stringify(sala.body)).not.toMatch(/usuario|cuenta/i);
+  });
+
+  it('crear y unirse usan la cookie, así que rechazan otro origen (CSRF)', async () => {
+    const cookie = await registrar('Wanda');
+    const malo = 'http://malo.example';
+
+    await request(url)
+      .post('/salas')
+      .set('Cookie', cookie)
+      .set('Origin', malo)
+      .send({ nombre: 'W' })
+      .expect(403);
+    const { salaId } = (
+      await request(url).post('/salas').set('Cookie', cookie).send({ nombre: 'W' }).expect(201)
+    ).body as Credencial;
+    await request(url)
+      .post(`/salas/${salaId}/unirse`)
+      .set('Origin', malo)
+      .send({ nombre: 'Intruso' })
+      .expect(403);
+  });
+
+  it('una cuenta no puede sentarse dos veces en la misma sala, pero un invitado sí entra', async () => {
+    const cookie = await registrar('Yago');
+    const { salaId } = (
+      await request(url).post('/salas').set('Cookie', cookie).send({ nombre: 'Yago' })
+    ).body as Credencial;
+
+    await request(url)
+      .post(`/salas/${salaId}/unirse`)
+      .set('Cookie', cookie)
+      .send({ nombre: 'Yago' })
+      .expect(409);
+    await request(url).post(`/salas/${salaId}/unirse`).send({ nombre: 'Invitado' }).expect(201);
+  });
+
+  it('las estadísticas piden sesión y, sin partidas, vienen en cero', async () => {
+    const cookie = await registrar('Xavi');
+
+    await request(url).get('/cuentas/yo/estadisticas').expect(401);
+    const r = await request(url).get('/cuentas/yo/estadisticas').set('Cookie', cookie).expect(200);
+
+    expect(r.body).toEqual({ partidas: 0, victorias: 0, promedioPuntos: 0, ultimas: [] });
+  });
+});
+
 describe('Límite de peticiones HTTP', () => {
   it('no limita las lecturas: la sala de espera consulta cada pocos segundos', async () => {
-    const modulo = await Test.createTestingModule({ imports: [JuegoModule] })
+    const modulo = await moduloDePrueba([JuegoModule])
       .overrideProvider(RepositorioSalas)
       .useValue(new RepositorioSalasMemoria())
       .overrideProvider(OPCIONES_LIMITE_HTTP)
@@ -176,16 +244,19 @@ describe('Límite de peticiones HTTP', () => {
     try {
       const { salaId } = (await request(base).post('/salas').send({ nombre: 'Ana' }))
         .body as Credencial;
-      for (let i = 0; i < 5; i += 1) {
-        await request(base).get(`/salas/${salaId}`).expect(200);
-        await request(base).get('/salas').expect(200);
-      }
+      // Diez lecturas con un límite de 1 escritura por minuto: ninguna debe dar 429.
+      await Promise.all(
+        Array.from({ length: 5 }, async () => {
+          await request(base).get(`/salas/${salaId}`).expect(200);
+          await request(base).get('/salas').expect(200);
+        }),
+      );
     } finally {
       await limitada.close();
     }
   });
   it('responde 429 cuando una dirección pasa del máximo', async () => {
-    const modulo = await Test.createTestingModule({ imports: [JuegoModule] })
+    const modulo = await moduloDePrueba([JuegoModule])
       .overrideProvider(RepositorioSalas)
       .useValue(new RepositorioSalasMemoria())
       .overrideProvider(OPCIONES_LIMITE_HTTP)

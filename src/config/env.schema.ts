@@ -19,6 +19,11 @@ export const esquemaEnv = z.object({
         .filter(Boolean),
     )
     .pipe(z.array(z.url()).min(1)),
+  // Si se define, hace falta para crear una cuenta (registro cerrado). Vacío = abierto.
+  CODIGO_REGISTRO: z.preprocess(
+    (valor) => (valor === '' ? undefined : valor),
+    z.string().min(12).max(100).optional(),
+  ),
 });
 
 export type Env = z.infer<typeof esquemaEnv>;

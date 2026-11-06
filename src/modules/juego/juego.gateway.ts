@@ -11,7 +11,7 @@ import type { Socket } from 'socket.io';
 import { z } from 'zod';
 import type { MotivoAccion } from '../../core/estado/tipos.js';
 import { accionDeJugador, esquemaAccionEntrante } from '../../schemas/accion.js';
-import { crearLimitador } from './limitador.js';
+import { crearLimitador } from '../../infra/http/limitador.js';
 import type { PartidaActor } from './partida-actor.js';
 import { SalasService } from './salas.service.js';
 
