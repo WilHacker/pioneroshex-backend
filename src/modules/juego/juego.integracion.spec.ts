@@ -8,6 +8,7 @@ import { AdaptadorSocketIo } from '../../infra/socket/socket-io.adapter.js';
 import { RepositorioSalasMemoria } from '../../infra/salas/repositorio-salas.memoria.js';
 import { RepositorioSalas } from '../../infra/salas/repositorio-salas.js';
 import { JuegoModule } from './juego.module.js';
+import { OPCIONES_LIMITE_HTTP } from './limite-http.guard.js';
 import { SalasService } from './salas.service.js';
 
 interface Credencial {
@@ -32,6 +33,8 @@ beforeAll(async () => {
   const modulo = await Test.createTestingModule({ imports: [JuegoModule] })
     .overrideProvider(RepositorioSalas)
     .useValue(new RepositorioSalasMemoria())
+    .overrideProvider(OPCIONES_LIMITE_HTTP)
+    .useValue({ maximo: 10_000 })
     .compile();
   app = modulo.createNestApplication();
   app.useWebSocketAdapter(new AdaptadorSocketIo(app, 'http://localhost:3000'));
@@ -115,6 +118,28 @@ describe('API HTTP de salas', () => {
       .set('Authorization', `Bearer ${a.token}`)
       .send({ semillaAzar: 'trampa' })
       .expect(400);
+  });
+});
+
+describe('Límite de peticiones HTTP', () => {
+  it('responde 429 cuando una dirección pasa del máximo', async () => {
+    const modulo = await Test.createTestingModule({ imports: [JuegoModule] })
+      .overrideProvider(RepositorioSalas)
+      .useValue(new RepositorioSalasMemoria())
+      .overrideProvider(OPCIONES_LIMITE_HTTP)
+      .useValue({ maximo: 2 })
+      .compile();
+    const limitada = modulo.createNestApplication();
+    await limitada.listen(0, '127.0.0.1');
+    const direccion = limitada.getHttpServer().address() as AddressInfo;
+    const base = `http://127.0.0.1:${direccion.port}`;
+    try {
+      await request(base).post('/salas').send({ nombre: 'Ana' }).expect(201);
+      await request(base).post('/salas').send({ nombre: 'Beto' }).expect(201);
+      await request(base).post('/salas').send({ nombre: 'Cleo' }).expect(429);
+    } finally {
+      await limitada.close();
+    }
   });
 });
 

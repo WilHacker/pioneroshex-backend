@@ -31,6 +31,21 @@ describe('validarEnv', () => {
     expect(() => validarEnv({ ...base, FRONTEND_URL: 'no-es-url' })).toThrow(/FRONTEND_URL/);
   });
 
+  it('acepta varios orígenes separados por comas', () => {
+    const env = validarEnv({
+      ...base,
+      FRONTEND_URL: 'http://localhost:3000, http://192.168.1.20:3000',
+    });
+
+    expect(env.FRONTEND_URL).toEqual(['http://localhost:3000', 'http://192.168.1.20:3000']);
+  });
+
+  it('rechaza si uno de los orígenes es inválido', () => {
+    expect(() => validarEnv({ ...base, FRONTEND_URL: 'http://localhost:3000,x' })).toThrow(
+      /FRONTEND_URL/,
+    );
+  });
+
   it('rechaza un PORT no numérico', () => {
     expect(() => validarEnv({ ...base, PORT: 'abc' })).toThrow(/PORT/);
   });

@@ -9,7 +9,7 @@ const TAMANO_MAX_MENSAJE = 16 * 1024;
 export class AdaptadorSocketIo extends IoAdapter {
   constructor(
     app: INestApplicationContext,
-    private readonly origen: string,
+    private readonly origen: string | string[],
   ) {
     super(app);
   }

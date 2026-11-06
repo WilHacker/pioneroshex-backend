@@ -125,7 +125,15 @@ Diseño del juego:
 
 ## Contrato con el frontend
 
-- CORS acepta únicamente `FRONTEND_URL` (`http://localhost:3000` en local).
+- CORS (HTTP y socket) acepta únicamente los orígenes de `FRONTEND_URL`: una lista separada por
+  comas (`http://localhost:3000` en local; añade `http://<IP-del-PC>:3000` para jugar desde otros
+  dispositivos de la casa).
+- Salas: `POST /salas`, `POST /salas/:id/unirse`, `GET /salas/:id`, `POST /salas/:id/empezar`
+  (`Authorization: Bearer <token>`). `LimiteHttpGuard` responde **429** al pasar de 20 peticiones
+  por minuto por IP (el registro de usuarios lo reutilizará).
+- Socket.io: `juego:accion` (con acuse) entra; `juego:inicio`, `juego:notificacion` y `juego:error`
+  salen. El servidor fija `jugador` desde la sesión. Esquemas Zod en `src/schemas/`. Protocolo
+  completo en la nota `Contrato-de-Red` del vault de Obsidian.
 - `GET /health` → `200 {"estado":"ok","baseDatos":"ok"}` o
   `503 {"estado":"error","baseDatos":"caida"}`. El frontend lo valida con Zod.
 - Cualquier cambio de forma de una respuesta o evento se coordina en **los dos repos**.

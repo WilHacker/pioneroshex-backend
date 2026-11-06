@@ -9,7 +9,16 @@ export const esquemaEnv = z.object({
   DATABASE_URL: z.string().startsWith('postgresql://', 'debe empezar con postgresql://'),
   REDIS_HOST: z.string().min(1).default('localhost'),
   REDIS_PORT: z.coerce.number().int().positive().default(6379),
-  FRONTEND_URL: z.url(),
+  // Uno o varios orígenes separados por comas (para entrar desde otros dispositivos de la casa).
+  FRONTEND_URL: z
+    .string()
+    .transform((texto) =>
+      texto
+        .split(',')
+        .map((origen) => origen.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.url()).min(1)),
 });
 
 export type Env = z.infer<typeof esquemaEnv>;

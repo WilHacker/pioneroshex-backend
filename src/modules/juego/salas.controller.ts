@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { LimiteHttpGuard } from './limite-http.guard.js';
 import { esquemaCrearSala, esquemaEmpezar, esquemaUnirse } from '../../schemas/salas.js';
 import { SalasService, type Credencial, type SalaPublica } from './salas.service.js';
 import { validar } from './validar.js';
@@ -10,6 +21,7 @@ function tokenDe(cabecera: string | undefined): string {
 }
 
 @Controller('salas')
+@UseGuards(LimiteHttpGuard)
 export class SalasController {
   constructor(@Inject(SalasService) private readonly salas: SalasService) {}
 
