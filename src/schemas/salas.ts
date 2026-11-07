@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { mapaDelCatalogo } from '../core/catalogo/catalogo.js';
 import { PUNTOS_VICTORIA_MIN } from '../core/partida/game-config.js';
 
 const NOMBRE_MAX = 20;
@@ -22,7 +23,19 @@ export const esquemaUnirse = z.strictObject({ nombre });
 /** Segundos por turno que se pueden elegir; 0 es sin límite. */
 export const TIEMPOS_DE_TURNO = [0, 30, 60, 90, 120, 180] as const;
 
+/**
+ * El id de un mapa del catálogo (nunca casillas del cliente) o `null` para el mapa automático.
+ * `mapaDelCatalogo` busca en un `Map`, así que `constructor` o `__proto__` no pasan.
+ */
+const mapa = z
+  .string()
+  .max(40)
+  .refine((id) => mapaDelCatalogo(id) !== undefined, { message: 'Mapa desconocido' })
+  .nullable()
+  .optional();
+
 const reglas = {
+  mapa,
   puntosVictoria: z.number().int().min(PUNTOS_VICTORIA_MIN).max(PUNTOS_VICTORIA_MAX).optional(),
   turnRuleMode: z.enum(['A', 'B']).optional(),
   modoDados: z.enum(['AZAR', 'EQUILIBRADO']).optional(),

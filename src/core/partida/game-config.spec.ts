@@ -128,10 +128,10 @@ describe('crearGameConfig', () => {
       expect(
         crearGameConfig({ semillaMapa: 'X', semillaAzar: 'AZAR-X', jugadores: JUGADORES_MAX })
           .jugadores,
-      ).toBe(10);
+      ).toBe(12);
     });
 
-    it.each([1, 11, 0, -3, 2.5, Number.NaN])('rechaza %s jugadores', (jugadores) => {
+    it.each([1, 13, 0, -3, 2.5, Number.NaN])('rechaza %s jugadores', (jugadores) => {
       expect(() => crearGameConfig({ semillaMapa: 'X', semillaAzar: 'AZAR-X', jugadores })).toThrow(
         /jugadores/,
       );

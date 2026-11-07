@@ -32,16 +32,19 @@ describe('limitesDePiezas', () => {
     expect(limitesDePiezas(jugadores)).toEqual({ caminos: 20, poblados: 7, ciudades: 5 });
   });
 
-  it.each([7, 8, 10])('con %i jugadores: 25 caminos, 8 poblados, 6 ciudades', (jugadores) => {
-    expect(limitesDePiezas(jugadores)).toEqual({ caminos: 25, poblados: 8, ciudades: 6 });
-  });
+  it.each([7, 8, 10, 11, 12])(
+    'con %i jugadores: 25 caminos, 8 poblados, 6 ciudades',
+    (jugadores) => {
+      expect(limitesDePiezas(jugadores)).toEqual({ caminos: 25, poblados: 8, ciudades: 6 });
+    },
+  );
 
-  it.each([1, 11, 3.5, Number.NaN])('rechaza %s jugadores', (jugadores) => {
+  it.each([1, 13, 3.5, Number.NaN])('rechaza %s jugadores', (jugadores) => {
     expect(() => limitesDePiezas(jugadores)).toThrow(/jugadores/);
   });
 
   it('crece sin bajar nunca al sumar jugadores', () => {
-    for (let j = 2; j < 10; j++) {
+    for (let j = 2; j < 12; j++) {
       const a = limitesDePiezas(j);
       const b = limitesDePiezas(j + 1);
       expect(b.caminos).toBeGreaterThanOrEqual(a.caminos);

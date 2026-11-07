@@ -1,4 +1,11 @@
-import { crearMapa, type Arista, type Mapa, type Vertice } from '../mapa/mapa.js';
+import { hex } from '../mapa/coordenadas.js';
+import {
+  crearMapa,
+  crearMapaDesdeCasillas,
+  type Arista,
+  type Mapa,
+  type Vertice,
+} from '../mapa/mapa.js';
 import type { GameConfig } from '../partida/game-config.js';
 import { generarPuertos, type Puerto } from '../reglas/puertos.js';
 import { generarTablero, type Tablero } from '../reglas/tablero.js';
@@ -14,7 +21,9 @@ export interface Mesa {
 }
 
 export function crearMesa(config: GameConfig): Mesa {
-  const mapa = crearMapa(config.radio);
+  const mapa = config.mapa
+    ? crearMapaDesdeCasillas(config.mapa.casillas.map(([q, r]) => hex(q, r)))
+    : crearMapa(config.radio);
   const vertices = new Map(mapa.vertices.map((v) => [v.id, v]));
   const aristas = new Map(mapa.aristas.map((a) => [a.id, a]));
   return {

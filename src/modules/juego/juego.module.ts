@@ -5,6 +5,7 @@ import { CuentasModule } from '../cuentas/cuentas.module.js';
 import { RepositorioSalasPrisma } from '../../infra/prisma/repositorio-salas.prisma.js';
 import { RepositorioSalas } from '../../infra/salas/repositorio-salas.js';
 import { JuegoGateway } from './juego.gateway.js';
+import { MapasController } from './mapas.controller.js';
 import { OPCIONES_LIMITE_HTTP } from '../../infra/http/limite-http.guard.js';
 import { PartidasService } from './partidas.service.js';
 import { SalasController } from './salas.controller.js';
@@ -14,7 +15,7 @@ import { SalasService } from './salas.service.js';
 // inició sesión. Solo se usa su servicio de lectura de sesiones.
 @Module({
   imports: [CuentasModule, HistorialModule],
-  controllers: [SalasController],
+  controllers: [SalasController, MapasController],
   providers: [
     // Fábricas a propósito: estos servicios reciben números y puertos que Nest no puede inyectar.
     { provide: PartidasService, useFactory: () => new PartidasService() },

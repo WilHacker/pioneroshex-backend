@@ -27,6 +27,8 @@ describe('composicionDelMazo', () => {
     [8, 2],
     [9, 3],
     [10, 3],
+    [11, 3],
+    [12, 3],
   ])('con %i jugadores el mazo base se multiplica por %i', (jugadores, veces) => {
     const composicion = composicionDelMazo(jugadores);
     for (const [carta, base] of Object.entries(CARTAS_BASE)) {
@@ -34,13 +36,13 @@ describe('composicionDelMazo', () => {
     }
   });
 
-  it.each([1, 11, 3.5, Number.NaN])('rechaza %s jugadores', (jugadores) => {
+  it.each([1, 13, 3.5, Number.NaN])('rechaza %s jugadores', (jugadores) => {
     expect(() => composicionDelMazo(jugadores)).toThrow(/jugadores/);
   });
 
   it('propiedad: el total es 25 × ceil(jugadores / 4)', () => {
     fc.assert(
-      fc.property(fc.integer({ min: 2, max: 10 }), (jugadores) => {
+      fc.property(fc.integer({ min: 2, max: 12 }), (jugadores) => {
         const total = Object.values(composicionDelMazo(jugadores)).reduce((a, b) => a + b, 0);
         expect(total).toBe(25 * Math.ceil(jugadores / 4));
       }),
@@ -78,14 +80,14 @@ describe('crearMazo', () => {
 
   it('propiedad: con cualquier semilla se conserva la composición', () => {
     fc.assert(
-      fc.property(fc.string({ minLength: 1 }), fc.integer({ min: 2, max: 10 }), (semilla, j) => {
+      fc.property(fc.string({ minLength: 1 }), fc.integer({ min: 2, max: 12 }), (semilla, j) => {
         expect(contar(crearMazo(j, semilla))).toEqual(composicionDelMazo(j));
       }),
       { numRuns: 50 },
     );
   });
 
-  it.each([1, 11])('rechaza %i jugadores', (jugadores) => {
+  it.each([1, 13])('rechaza %i jugadores', (jugadores) => {
     expect(() => crearMazo(jugadores, 'X')).toThrow(/jugadores/);
   });
 });

@@ -38,8 +38,11 @@ export interface VistaJugador {
 }
 
 export interface Vista {
-  /** Sin `semillaAzar`: de ella sale el azar secreto (dados, mazo). La `semillaMapa` es pública. */
-  readonly config: Omit<GameConfig, 'semillaAzar'>;
+  /**
+   * Sin `semillaAzar`: de ella sale el azar secreto (dados, mazo). La `semillaMapa` es pública.
+   * Sin `mapa`: la lista de casillas ya llega una vez en la mesa pública; no se repite en cada vista.
+   */
+  readonly config: Omit<GameConfig, 'semillaAzar' | 'mapa'>;
   readonly yo: JugadorId | null;
   readonly jugadores: readonly VistaJugador[];
   readonly fase: Fase;
@@ -69,7 +72,7 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
   if (jugadorId !== null && !estado.jugadores.some((j) => j.id === jugadorId)) {
     throw new Error(`El jugador "${jugadorId}" no participa en la partida`);
   }
-  const { semillaAzar: _oculta, ...configPublica } = estado.config;
+  const { semillaAzar: _oculta, mapa: _enLaMesa, ...configPublica } = estado.config;
   const jugadores = estado.jugadores.map((j): VistaJugador => {
     const esYo = j.id === jugadorId;
     const incluirOcultos = esYo || estado.fase === 'FIN';

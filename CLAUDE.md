@@ -58,7 +58,7 @@ Diseño del juego:
 - **Registro de eventos (event sourcing):** no se hace ahora, pero el diseño no lo impide: se
   añade encima sin reescribir. Definir los eventos antes de escribir el reductor.
 - **Alternativas descartadas:** boardgame.io y Colyseus. Traen fases, secretos y reconexión hechos,
-  pero imponen su modelo de estado, y este juego tiene mapas dinámicos, de 2 a 10 jugadores,
+  pero imponen su modelo de estado, y este juego tiene mapas dinámicos, de 2 a 12 jugadores,
   comercio asíncrono y temporizadores. Reconsiderar si escribir reconexión y filtrado a mano
   resulta demasiado caro.
 

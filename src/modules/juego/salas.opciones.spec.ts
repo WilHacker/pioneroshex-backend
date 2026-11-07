@@ -96,7 +96,7 @@ describe('SalasService: salas abiertas', () => {
     await salas.empezar(empezada.salaId, empezada.token, {});
 
     expect(salas.abiertas()).toEqual([
-      { id: abierta.salaId, anfitrion: 'Ana', jugadores: 2, maximo: 10 },
+      { id: abierta.salaId, anfitrion: 'Ana', jugadores: 2, maximo: 12 },
     ]);
   });
 
@@ -136,8 +136,8 @@ describe('SalasService: partidas con muchos jugadores', () => {
     expect(inicial.config.radio).toBe(2);
   });
 
-  it('de 5 a 10 jugadores siempre se puede empezar, con cualquier modo de turnos', async () => {
-    const casos = [5, 6, 7, 8, 9, 10].flatMap((n) =>
+  it('de 5 a 12 jugadores siempre se puede empezar, con cualquier modo de turnos', async () => {
+    const casos = [5, 6, 7, 8, 9, 10, 11, 12].flatMap((n) =>
       (['A', 'B'] as const).map((turnRuleMode) => ({ n, turnRuleMode })),
     );
 

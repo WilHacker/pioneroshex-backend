@@ -10,6 +10,7 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
+import { aMapaConfig, infoDelMapa, mapaDelCatalogo } from '../../core/catalogo/catalogo.js';
 import { crearMesa } from '../../core/estado/mesa.js';
 import { puntosDe } from '../../core/estado/puntos.js';
 import type { Estado } from '../../core/estado/tipos.js';
@@ -48,6 +49,8 @@ export interface SalaPublica {
   readonly jugadores: readonly { readonly id: string; readonly nombre: string }[];
   readonly publica: boolean;
   readonly opciones: Readonly<Record<string, unknown>>;
+  /** Jugadores que admite la sala: el tope del juego o el del mapa elegido, el que sea menor. */
+  readonly maximo: number;
 }
 
 /** Una fila de la lista de salas abiertas: solo lo que hace falta para decidir si entrar. */
@@ -80,6 +83,13 @@ interface SalaViva {
   readonly partidaId: string | null;
   readonly publica: boolean;
   readonly opciones: Readonly<Record<string, unknown>>;
+}
+
+/** Jugadores que admite la sala: el tope del juego o el máximo técnico del mapa elegido. */
+function maximoDeSala(sala: SalaViva): number {
+  const id = sala.opciones.mapa;
+  const mapa = typeof id === 'string' ? mapaDelCatalogo(id) : undefined;
+  return mapa ? infoDelMapa(mapa).maximoTecnico : JUGADORES_MAX;
 }
 
 /** Los segundos que eligió el anfitrión (o nada) como milisegundos para el actor. */
@@ -147,8 +157,9 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   async unirse(salaId: string, nombre: string, usuarioId?: string): Promise<Credencial> {
     const sala = this.requerir(salaId);
     if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
-    if (sala.jugadores.length >= JUGADORES_MAX) {
-      throw new ConflictException(`La sala está llena (máximo ${JUGADORES_MAX} jugadores)`);
+    const maximo = maximoDeSala(sala);
+    if (sala.jugadores.length >= maximo) {
+      throw new ConflictException(`La sala está llena (máximo ${maximo} jugadores)`);
     }
     if (usuarioId !== undefined && sala.jugadores.some((j) => j.usuarioId === usuarioId)) {
       throw new ConflictException('Ya estás en esta sala');
@@ -169,6 +180,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
       jugadores: sala.jugadores.map((j) => ({ id: j.id, nombre: j.nombre })),
       publica: sala.publica,
       opciones: sala.opciones,
+      maximo: maximoDeSala(sala),
     };
   }
 
@@ -181,7 +193,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
         id: sala.id,
         anfitrion: sala.jugadores.find((j) => j.id === sala.anfitrion)?.nombre ?? '',
         jugadores: sala.jugadores.length,
-        maximo: JUGADORES_MAX,
+        maximo: maximoDeSala(sala),
       });
     }
     return lista.slice(0, SALAS_ABIERTAS_MAX);
@@ -192,6 +204,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     const sala = this.requerirAnfitrion(salaId, token);
     if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
     const { publica, ...reglas } = cambios;
+    if (typeof reglas.mapa === 'string') this.requerirQueCaben(sala, reglas.mapa);
     const nueva: SalaViva = {
       ...sala,
       publica: publica ?? sala.publica,
@@ -305,16 +318,33 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     return { jugador, token };
   }
 
+  /** Que el mapa elegido exista y admita a los jugadores que la sala ya tiene. */
+  private requerirQueCaben(sala: SalaViva, idMapa: string): void {
+    const mapa = mapaDelCatalogo(idMapa);
+    if (!mapa) throw new BadRequestException(`Mapa desconocido: «${idMapa.slice(0, 40)}»`);
+    const { nombre, maximoTecnico } = infoDelMapa(mapa);
+    if (sala.jugadores.length > maximoTecnico) {
+      throw new ConflictException(
+        `El mapa «${nombre}» admite hasta ${maximoTecnico} jugadores y la sala ya tiene ${sala.jugadores.length}`,
+      );
+    }
+  }
+
   private crearPartida(
     sala: SalaViva,
     opciones: EmpezarEntrada,
   ): { id: string; actor: PartidaActor } {
-    // El tiempo por turno es cosa del servidor (el actor), no una regla del motor.
-    const { turnoSegundos, ...reglas } = opciones;
+    // El tiempo por turno es cosa del servidor (el actor), no una regla del motor. El mapa llega
+    // como el id de un mapa del catálogo y a la partida va como una copia de sus casillas.
+    const { turnoSegundos, mapa: idMapa, ...reglas } = opciones;
+    const entradaMapa = typeof idMapa === 'string' ? mapaDelCatalogo(idMapa) : undefined;
+    if (typeof idMapa === 'string' && !entradaMapa) {
+      throw new BadRequestException(`Mapa desconocido: «${idMapa.slice(0, 40)}»`);
+    }
     try {
       return this.partidas.crear(
         sala.jugadores.map((j) => j.id),
-        reglas,
+        { ...reglas, ...(entradaMapa ? { mapa: aMapaConfig(entradaMapa) } : {}) },
         () => ({
           ahora: this.ahora,
           alCambiar: (estado) => this.guardarPorId(sala.id, estado),

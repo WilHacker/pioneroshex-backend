@@ -50,6 +50,7 @@ describe('SalasService: crear y unirse', () => {
       jugadores: [{ id: 'j1', nombre: 'Ana' }],
       publica: false,
       opciones: {},
+      maximo: 12,
     });
   });
 
@@ -74,10 +75,10 @@ describe('SalasService: crear y unirse', () => {
     expect(await falla(crear().salas.unirse('00000000', 'Ana'))).toBe(404);
   });
 
-  it('no deja pasar de 10 jugadores (409)', async () => {
+  it('no deja pasar de 12 jugadores (409)', async () => {
     const { salas } = crear();
     const { salaId } = await salas.crear('J1');
-    for (let i = 2; i <= 10; i++) await salas.unirse(salaId, `J${i}`); // eslint-disable-line no-await-in-loop
+    for (let i = 2; i <= 12; i++) await salas.unirse(salaId, `J${i}`); // eslint-disable-line no-await-in-loop
     expect(await falla(salas.unirse(salaId, 'Extra'))).toBe(409);
   });
 
