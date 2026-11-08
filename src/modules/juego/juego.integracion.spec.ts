@@ -502,3 +502,24 @@ describe('abandonar la partida', () => {
     expect(rechazo).toMatchObject({ ok: false, motivo: 'ACCION_INVALIDA' });
   });
 });
+
+describe('Revancha por HTTP', () => {
+  it('antes de terminar da 409, sin token 401 y al terminar entrega la sala nueva', async () => {
+    const { a, b } = await partidaEmpezada();
+    const pedir = (token?: string) => {
+      const peticion = request(url).post(`/salas/${a.salaId}/revancha`);
+      return token === undefined ? peticion : peticion.set('Authorization', `Bearer ${token}`);
+    };
+
+    await pedir(b.token).expect(409);
+    await salas.partida(a.salaId)!.enviar({ tipo: 'ABANDONAR', jugador: b.jugadorId });
+    await pedir().expect(401);
+
+    const nueva = (await pedir(a.token).expect(201)).body as Credencial;
+    expect(nueva.salaId).not.toBe(a.salaId);
+    const vista = await request(url).get(`/salas/${nueva.salaId}`).expect(200);
+    expect(vista.body).toMatchObject({ empezada: false, jugadores: [{ nombre: 'Ana' }] });
+    const deBeto = (await pedir(b.token).expect(201)).body as Credencial;
+    expect(deBeto.salaId).toBe(nueva.salaId);
+  });
+});

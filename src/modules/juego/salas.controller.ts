@@ -131,6 +131,16 @@ export class SalasController {
     await this.salas.cederAnfitrion(id, tokenDe(autorizacion), jugadorId);
   }
 
+  /** Terminada la partida, abre (o se une a) la sala de revancha y devuelve la credencial nueva. */
+  @Post(':id/revancha')
+  @UseGuards(LimiteHttpGuard)
+  async revancha(
+    @Param('id') id: string,
+    @Headers('authorization') autorizacion: string | undefined,
+  ): Promise<Credencial> {
+    return this.salas.revancha(id, tokenDe(autorizacion));
+  }
+
   @Post(':id/empezar')
   @HttpCode(204)
   @UseGuards(LimiteHttpGuard)

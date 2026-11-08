@@ -154,6 +154,7 @@ Diseño del juego:
   cambio y el gateway difunde; las acciones (crear, entrar, salir…) siguen por HTTP. Nunca viajan tokens.
 - **Un nombre por sala** (sin distinguir mayúsculas ni espacios): repetirlo da **409**. Una **cuenta** que vuelve a
   entrar a la sala donde ya estaba recupera su asiento con un token nuevo (el anterior deja de valer).
+- **Revancha:** `POST /salas/:id/revancha` (Bearer de un jugador de esa partida, ya terminada; 409 si no, 401 sin token). El primero crea una sala nueva con las mismas reglas (y es su anfitrión); los demás entran a esa misma sala; pedirla otra vez recupera tu asiento (token nuevo). El mapa sala→revancha vive solo en memoria.
 - `GET /health` → `200 {"estado":"ok","baseDatos":"ok"}` o
   `503 {"estado":"error","baseDatos":"caida"}`. El frontend lo valida con Zod.
 - Cualquier cambio de forma de una respuesta o evento se coordina en **los dos repos**.

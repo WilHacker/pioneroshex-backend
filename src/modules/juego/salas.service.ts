@@ -128,6 +128,12 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   private temporizador: NodeJS.Timeout | undefined;
   private escritura: Promise<unknown> = Promise.resolve();
   private readonly escuchas = new Set<(salaId: string) => void>();
+  // La sala de revancha de cada partida terminada y el asiento de cada jugador en ella. Solo en memoria:
+  // tras un reinicio, la siguiente petición simplemente crea otra sala.
+  private readonly revanchas = new Map<
+    string,
+    { readonly nuevaId: string; readonly asientos: Map<string, string> }
+  >();
 
   constructor(
     private readonly partidas: PartidasService,
@@ -237,6 +243,44 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     this.salas.set(sala.id, nueva);
     await this.guardar(nueva, null);
     return { salaId: sala.id, jugadorId: jugador.id, token };
+  }
+
+  /**
+   * Terminada la partida, cualquiera de sus jugadores pide la revancha: el primero crea una sala nueva
+   * con las mismas reglas (y es su anfitrión); los demás entran a esa misma sala con su nombre. Pedirla
+   * dos veces recupera tu asiento en vez de duplicarte. Solo cuenta quien jugó la partida.
+   */
+  async revancha(salaId: string, token: string): Promise<Credencial> {
+    const sala = this.requerir(salaId);
+    const jugadorId = this.autenticar(salaId, token);
+    if (jugadorId === undefined) throw new UnauthorizedException('Token inválido');
+    if (this.partida(salaId)?.estado.fase !== 'FIN') {
+      throw new ConflictException('La partida aún no terminó');
+    }
+    const yo = this.jugadorDe(sala, jugadorId);
+    const previa = this.revanchas.get(salaId);
+    const nueva = previa === undefined ? undefined : this.salas.get(previa.nuevaId);
+    if (previa === undefined || nueva === undefined) {
+      const reglas = sala.opciones as Omit<CambiarSalaEntrada, 'publica'>;
+      const credencial = await this.crear(yo.nombre, false, yo.usuarioId, reglas);
+      this.revanchas.set(salaId, {
+        nuevaId: credencial.salaId,
+        asientos: new Map([[jugadorId, credencial.jugadorId]]),
+      });
+      return credencial;
+    }
+    const asiento = previa.asientos.get(jugadorId);
+    const mio = nueva.jugadores.find((j) => j.id === asiento);
+    if (mio) return this.recuperarAsiento(nueva, mio);
+    const credencial = await this.unirse(nueva.id, yo.nombre, yo.usuarioId);
+    previa.asientos.set(jugadorId, credencial.jugadorId);
+    return credencial;
+  }
+
+  private jugadorDe(sala: SalaViva, jugadorId: string): JugadorDeSala {
+    const jugador = sala.jugadores.find((j) => j.id === jugadorId);
+    if (!jugador) throw new NotFoundException('Ese jugador no está en la sala');
+    return jugador;
   }
 
   estado(salaId: string): SalaPublica {
@@ -375,6 +419,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     for (const id of quitadas) {
       this.salas.delete(id);
       this.ultimas.delete(id);
+      this.revanchas.delete(id);
       this.avisar(id);
     }
     await Promise.all(
