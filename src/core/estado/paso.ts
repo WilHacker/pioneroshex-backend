@@ -73,7 +73,12 @@ export function paso(
       return {
         observador,
         vista: vistaPara(nuevo, observador),
-        eventos: eventosPara(eventos, observador),
+        eventos: eventosPara(eventos, observador, {
+          comercioPrivado: estado.config.modoComercio === 'PRIVADO',
+          tratos: estado.tratos,
+          ocultarBanco: estado.config.ocultarBanco,
+          manosVisibles: estado.config.manosVisibles,
+        }),
         acciones: ayudaDe.acciones,
         sitios: ayudaDe.sitios,
       };

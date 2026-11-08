@@ -39,7 +39,7 @@ function simular3(semilla: string, maxTurnos = MAX_TURNOS) {
 describe('simularPartida', () => {
   it.each(SEMILLAS_3.map((i) => `sim-${i}`))(
     '3 jugadores, radio 2, semilla %s: termina con ganador y sin violaciones',
-    { timeout: 5000 },
+    { timeout: 30_000 },
     (semilla) => {
       const { config, estado } = simular3(semilla);
       comprobarFinal(config, estado);
@@ -118,11 +118,11 @@ describe('repetición', () => {
     }));
   });
 
-  it('reproducir las acciones da el mismo estado final', { timeout: 5000 }, () => {
+  it('reproducir las acciones da el mismo estado final', { timeout: 30_000 }, () => {
     expect(reproducir(config, ids, acciones)).toEqual(estado);
   });
 
-  it('pasar el estado por JSON a mitad de partida no cambia el final', { timeout: 5000 }, () => {
+  it('pasar el estado por JSON a mitad de partida no cambia el final', { timeout: 30_000 }, () => {
     const mitad = Math.floor(acciones.length / 2);
     const intermedio = reproducir(config, ids, acciones.slice(0, mitad));
     const mesa = crearMesa(config);

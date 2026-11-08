@@ -1,3 +1,4 @@
+import { RONDAS_ARRANQUE_PROTEGIDO } from '../partida/game-config.js';
 import { RECURSOS } from '../reglas/recursos.js';
 import { tirarDados } from './dados.js';
 import type { Mesa } from './mesa.js';
@@ -14,7 +15,10 @@ export function decidirTirada(
   if (accion.tipo !== 'TIRAR_DADOS' || estado.fase !== 'PRE_TIRADA') {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
   }
-  const dados = tirarDados(estado.config.semillaAzar, estado.tiradas, estado.config.modoDados);
+  const { semillaAzar, modoDados, arranqueProtegido, jugadores } = estado.config;
+  const dados = tirarDados(semillaAzar, estado.tiradas, modoDados, {
+    sinSieteHasta: arranqueProtegido ? jugadores * RONDAS_ARRANQUE_PROTEGIDO : 0,
+  });
   const suma = dados[0] + dados[1];
 
   if (suma === 7) {

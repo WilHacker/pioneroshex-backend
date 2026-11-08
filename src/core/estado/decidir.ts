@@ -6,6 +6,7 @@ import {
   decidirProponerTrato,
   decidirRechazarTrato,
 } from './comercio-jugadores.js';
+import { decidirAbandono } from './abandono.js';
 import { decidirConstruccion } from './construccion.js';
 import {
   decidirComprarCarta,
@@ -48,6 +49,7 @@ export const manejadores: Readonly<Record<Accion['tipo'], Manejador>> = {
   JUGAR_MONOPOLIO: decidirJugarMonopolio,
   PASAR_CONSTRUCCION_ESPECIAL: decidirPasarConstruccionEspecial,
   TERMINAR_TURNO: decidirFinDeTurno,
+  ABANDONAR: (_mesa, estado, accion) => decidirAbandono(estado, accion),
 };
 
 /** Valida una acción y devuelve los eventos que produce o el motivo del rechazo. No muta nada. */
@@ -55,6 +57,9 @@ export function decidir(mesa: Mesa, estado: Estado, accion: Accion): Decision {
   if (estado.fase === 'FIN') return { ok: false, motivo: 'PARTIDA_TERMINADA' };
   const indice = estado.jugadores.findIndex((j) => j.id === accion.jugador);
   if (indice === -1) return { ok: false, motivo: 'JUGADOR_DESCONOCIDO' };
+
+  // Abandonar no depende del turno ni de la fase: se puede en cualquier momento.
+  if (accion.tipo === 'ABANDONAR') return decidirAbandono(estado, accion);
 
   if (estado.fase === 'DESCARTE') {
     // En descarte, cualquier jugador con descartes pendientes puede actuar

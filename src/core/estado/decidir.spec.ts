@@ -65,8 +65,11 @@ describe('decidir: comprobaciones generales', () => {
   it('todos los tipos de acción tienen manejador', () => {
     const tipos = accionesDe(j0).map((a) => a.tipo);
     expect(tipos).toHaveLength(23);
-    expect(Object.keys(manejadores).toSorted()).toEqual(tipos.toSorted());
-    for (const tipo of tipos) expect(manejadores[tipo]).toBeTypeOf('function');
+    // ABANDONAR tiene manejador pero no sale en la ayuda: no es una jugada que se ofrezca.
+    expect(Object.keys(manejadores).toSorted()).toEqual([...tipos, 'ABANDONAR'].toSorted());
+    for (const tipo of [...tipos, 'ABANDONAR' as const]) {
+      expect(manejadores[tipo]).toBeTypeOf('function');
+    }
   });
 
   describe('tipo de acción desconocido (core se puede llamar sin pasar por Zod)', () => {

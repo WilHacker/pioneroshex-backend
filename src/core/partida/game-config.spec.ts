@@ -13,6 +13,13 @@ describe('crearGameConfig', () => {
       robberHandLimit: 7,
       puntosVictoria: 10,
       modoDados: 'AZAR',
+      ordenDeTurno: 'ALEATORIO',
+      ladronAmistoso: false,
+      modoComercio: 'LIBRE',
+      maxOfertasPorTurno: 0,
+      arranqueProtegido: false,
+      ocultarBanco: false,
+      manosVisibles: false,
     });
   });
 
@@ -51,6 +58,7 @@ describe('crearGameConfig', () => {
       robberHandLimit: 8,
       puntosVictoria: 8,
       modoDados: 'EQUILIBRADO',
+      ordenDeTurno: 'TIRADA',
     });
     expect(config).toEqual({
       semillaMapa: 'X',
@@ -61,6 +69,13 @@ describe('crearGameConfig', () => {
       robberHandLimit: 8,
       puntosVictoria: 8,
       modoDados: 'EQUILIBRADO',
+      ordenDeTurno: 'TIRADA',
+      ladronAmistoso: false,
+      modoComercio: 'LIBRE',
+      maxOfertasPorTurno: 0,
+      arranqueProtegido: false,
+      ocultarBanco: false,
+      manosVisibles: false,
     });
   });
 

@@ -85,16 +85,24 @@ interface SalaViva {
   readonly opciones: Readonly<Record<string, unknown>>;
 }
 
-/** Jugadores que admite la sala: el tope del juego o el máximo técnico del mapa elegido. */
+/** Jugadores que admite la sala: el menor entre el tope que eligió el anfitrión, el del mapa y el del juego. */
 function maximoDeSala(sala: SalaViva): number {
   const id = sala.opciones.mapa;
   const mapa = typeof id === 'string' ? mapaDelCatalogo(id) : undefined;
-  return mapa ? infoDelMapa(mapa).maximoTecnico : JUGADORES_MAX;
+  const delMapa = mapa ? infoDelMapa(mapa).maximoTecnico : JUGADORES_MAX;
+  const elegido = sala.opciones.maxJugadores;
+  return typeof elegido === 'number' ? Math.min(elegido, delMapa) : delMapa;
 }
 
 /** Los segundos que eligió el anfitrión (o nada) como milisegundos para el actor. */
 const limiteDeTurnoMs = (segundos: unknown): number | undefined =>
   typeof segundos === 'number' && segundos > 0 ? segundos * 1000 : undefined;
+
+/** El número que sigue al id más alto (`j3` → 4): ids que no se repiten aunque alguien haya salido. */
+function siguienteNumero(jugadores: readonly JugadorDeSala[]): number {
+  const numeros = jugadores.map((j) => Number(j.id.slice(1))).filter(Number.isInteger);
+  return Math.max(0, ...numeros) + 1;
+}
 
 const hashDe = (token: string): string => createHash('sha256').update(token).digest('hex');
 
@@ -106,6 +114,11 @@ const mensajeDe = (error: unknown): string =>
  * recibe un token secreto, y ese token es lo que lo identifica como jugador en el socket.
  * La memoria manda; el repositorio es una copia para sobrevivir a un reinicio.
  */
+/** Dos nombres son el mismo si solo difieren en mayúsculas, espacios sobrantes o forma Unicode. */
+function claveDeNombre(nombre: string): string {
+  return nombre.normalize('NFC').trim().toLocaleLowerCase('es');
+}
+
 export class SalasService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SalasService.name);
   private readonly salas = new Map<string, SalaViva>();
@@ -114,6 +127,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   private readonly historial: RepositorioHistorial | undefined;
   private temporizador: NodeJS.Timeout | undefined;
   private escritura: Promise<unknown> = Promise.resolve();
+  private readonly escuchas = new Set<(salaId: string) => void>();
 
   constructor(
     private readonly partidas: PartidasService,
@@ -123,6 +137,26 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     this.ahora = opciones.ahora ?? Date.now;
     this.limiteSalas = opciones.limiteSalas ?? LIMITE_SALAS_POR_DEFECTO;
     this.historial = opciones.historial;
+  }
+
+  /**
+   * Avisa cada vez que una sala cambia (o desaparece), cuando el estado en memoria ya es el nuevo.
+   * Es lo que usa el socket de la sala de espera para empujar el estado en lugar de sondear.
+   * Devuelve la función que da de baja la escucha.
+   */
+  alCambiar(escucha: (salaId: string) => void): () => void {
+    this.escuchas.add(escucha);
+    return () => void this.escuchas.delete(escucha);
+  }
+
+  private avisar(salaId: string): void {
+    for (const escucha of this.escuchas) {
+      try {
+        escucha(salaId);
+      } catch (error: unknown) {
+        this.logger.error(`Falló una escucha de cambios de sala: ${mensajeDe(error)}`);
+      }
+    }
   }
 
   async onModuleInit(): Promise<void> {
@@ -135,10 +169,17 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     clearInterval(this.temporizador);
   }
 
-  async crear(nombre: string, publica = false, usuarioId?: string): Promise<Credencial> {
+  async crear(
+    nombre: string,
+    publica = false,
+    usuarioId?: string,
+    reglas: Omit<CambiarSalaEntrada, 'publica'> = {},
+  ): Promise<Credencial> {
     if (this.salas.size >= this.limiteSalas) {
       throw new ServiceUnavailableException('Hay demasiadas salas abiertas, prueba más tarde');
     }
+    // Antes de crear nada: un mapa que no existe no deja una sala a medias.
+    if (typeof reglas.mapa === 'string') this.requerirQueCaben({ jugadores: [] }, reglas.mapa);
     const id = crearIdDeSala((candidato) => this.salas.has(candidato));
     const { jugador, token } = this.nuevoJugador(1, nombre, usuarioId);
     const sala: SalaViva = {
@@ -147,7 +188,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
       jugadores: [jugador],
       partidaId: null,
       publica,
-      opciones: {},
+      opciones: { ...reglas },
     };
     this.salas.set(id, sala);
     await this.guardar(sala, null);
@@ -157,18 +198,45 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   async unirse(salaId: string, nombre: string, usuarioId?: string): Promise<Credencial> {
     const sala = this.requerir(salaId);
     if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
+    const suyo =
+      usuarioId === undefined ? undefined : sala.jugadores.find((j) => j.usuarioId === usuarioId);
+    if (suyo) return this.recuperarAsiento(sala, suyo);
     const maximo = maximoDeSala(sala);
     if (sala.jugadores.length >= maximo) {
       throw new ConflictException(`La sala está llena (máximo ${maximo} jugadores)`);
     }
-    if (usuarioId !== undefined && sala.jugadores.some((j) => j.usuarioId === usuarioId)) {
-      throw new ConflictException('Ya estás en esta sala');
+    // Un nombre por sala: sin cuenta no hay otra forma de saber que es la misma persona, y quien
+    // vuelve a entrar con su enlace conserva su credencial en el navegador.
+    const clave = claveDeNombre(nombre);
+    if (sala.jugadores.some((j) => claveDeNombre(j.nombre) === clave)) {
+      throw new ConflictException('Ya hay alguien con ese nombre en la sala: elige otro');
     }
-    const { jugador, token } = this.nuevoJugador(sala.jugadores.length + 1, nombre, usuarioId);
+    const { jugador, token } = this.nuevoJugador(
+      siguienteNumero(sala.jugadores),
+      nombre,
+      usuarioId,
+    );
     const nueva: SalaViva = { ...sala, jugadores: [...sala.jugadores, jugador] };
     this.salas.set(salaId, nueva);
     await this.guardar(nueva, null);
     return { salaId, jugadorId: jugador.id, token };
+  }
+
+  /**
+   * La misma cuenta que vuelve a una sala en la que ya estaba (otra pestaña, otro dispositivo) es la
+   * misma persona: conserva su asiento y recibe un token nuevo. El anterior deja de valer.
+   */
+  private async recuperarAsiento(sala: SalaViva, jugador: JugadorDeSala): Promise<Credencial> {
+    const token = randomBytes(BYTES_TOKEN).toString('base64url');
+    const nueva: SalaViva = {
+      ...sala,
+      jugadores: sala.jugadores.map((j) =>
+        j.id === jugador.id ? { ...j, tokenHash: hashDe(token) } : j,
+      ),
+    };
+    this.salas.set(sala.id, nueva);
+    await this.guardar(nueva, null);
+    return { salaId: sala.id, jugadorId: jugador.id, token };
   }
 
   estado(salaId: string): SalaPublica {
@@ -205,11 +273,47 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
     const { publica, ...reglas } = cambios;
     if (typeof reglas.mapa === 'string') this.requerirQueCaben(sala, reglas.mapa);
+    if (reglas.maxJugadores !== undefined && reglas.maxJugadores < sala.jugadores.length) {
+      throw new ConflictException(
+        `La sala ya tiene ${sala.jugadores.length} jugadores: el máximo no puede ser menor`,
+      );
+    }
     const nueva: SalaViva = {
       ...sala,
       publica: publica ?? sala.publica,
       opciones: { ...sala.opciones, ...reglas },
     };
+    this.salas.set(salaId, nueva);
+    await this.guardar(nueva, null);
+  }
+
+  /** Un jugador se va de la sala de espera. Si era el anfitrión, el cargo pasa al más antiguo. */
+  async salir(salaId: string, token: string): Promise<void> {
+    const sala = this.requerir(salaId);
+    const jugadorId = this.autenticar(salaId, token);
+    if (jugadorId === undefined) throw new UnauthorizedException('Token inválido');
+    if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
+    await this.quitar(sala, jugadorId);
+  }
+
+  /** El anfitrión saca a otro jugador de la sala de espera. */
+  async expulsar(salaId: string, token: string, jugadorId: string): Promise<void> {
+    const sala = this.requerirAnfitrion(salaId, token);
+    if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
+    if (jugadorId === sala.anfitrion) {
+      throw new ConflictException('El anfitrión no puede expulsarse a sí mismo: usa «salir»');
+    }
+    this.requerirJugador(sala, jugadorId);
+    await this.quitar(sala, jugadorId);
+  }
+
+  /** El anfitrión le pasa el cargo a otro jugador de la sala. */
+  async cederAnfitrion(salaId: string, token: string, jugadorId: string): Promise<void> {
+    const sala = this.requerirAnfitrion(salaId, token);
+    if (sala.partidaId !== null) throw new ConflictException('La partida ya empezó');
+    if (jugadorId === sala.anfitrion) throw new ConflictException('Ya eres el anfitrión');
+    this.requerirJugador(sala, jugadorId);
+    const nueva: SalaViva = { ...sala, anfitrion: jugadorId };
     this.salas.set(salaId, nueva);
     await this.guardar(nueva, null);
   }
@@ -271,6 +375,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     for (const id of quitadas) {
       this.salas.delete(id);
       this.ultimas.delete(id);
+      this.avisar(id);
     }
     await Promise.all(
       quitadas.map((id) =>
@@ -303,6 +408,35 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
     return sala;
   }
 
+  private requerirJugador(sala: SalaViva, jugadorId: string): void {
+    if (!sala.jugadores.some((j) => j.id === jugadorId)) {
+      throw new NotFoundException('Ese jugador no está en la sala');
+    }
+  }
+
+  /** Saca a `jugadorId` de la sala; sin nadie dentro, la sala se borra. */
+  private async quitar(sala: SalaViva, jugadorId: string): Promise<void> {
+    const quedan = sala.jugadores.filter((j) => j.id !== jugadorId);
+    const [primero] = quedan;
+    if (primero === undefined) {
+      this.salas.delete(sala.id);
+      this.ultimas.delete(sala.id);
+      this.avisar(sala.id);
+      await this.intentar(
+        () => this.enCola(() => this.repositorio.eliminar(sala.id)),
+        'borrar la sala',
+      );
+      return;
+    }
+    const nueva: SalaViva = {
+      ...sala,
+      jugadores: quedan,
+      anfitrion: sala.anfitrion === jugadorId ? primero.id : sala.anfitrion,
+    };
+    this.salas.set(sala.id, nueva);
+    await this.guardar(nueva, null);
+  }
+
   private nuevoJugador(
     numero: number,
     nombre: string,
@@ -319,7 +453,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Que el mapa elegido exista y admita a los jugadores que la sala ya tiene. */
-  private requerirQueCaben(sala: SalaViva, idMapa: string): void {
+  private requerirQueCaben(sala: Pick<SalaViva, 'jugadores'>, idMapa: string): void {
     const mapa = mapaDelCatalogo(idMapa);
     if (!mapa) throw new BadRequestException(`Mapa desconocido: «${idMapa.slice(0, 40)}»`);
     const { nombre, maximoTecnico } = infoDelMapa(mapa);
@@ -332,11 +466,11 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
 
   private crearPartida(
     sala: SalaViva,
-    opciones: EmpezarEntrada,
+    opciones: EmpezarEntrada & { readonly maxJugadores?: number | undefined },
   ): { id: string; actor: PartidaActor } {
     // El tiempo por turno es cosa del servidor (el actor), no una regla del motor. El mapa llega
     // como el id de un mapa del catálogo y a la partida va como una copia de sus casillas.
-    const { turnoSegundos, mapa: idMapa, ...reglas } = opciones;
+    const { turnoSegundos, mapa: idMapa, maxJugadores: _tope, ...reglas } = opciones;
     const entradaMapa = typeof idMapa === 'string' ? mapaDelCatalogo(idMapa) : undefined;
     if (typeof idMapa === 'string' && !entradaMapa) {
       throw new BadRequestException(`Mapa desconocido: «${idMapa.slice(0, 40)}»`);
@@ -403,6 +537,7 @@ export class SalasService implements OnModuleInit, OnModuleDestroy {
 
   private async guardar(sala: SalaViva, estado: Estado | null): Promise<void> {
     this.ultimas.set(sala.id, this.ahora());
+    this.avisar(sala.id);
     await this.intentar(
       () => this.enCola(() => this.repositorio.guardar(this.aFila(sala, estado))),
       'guardar la sala',

@@ -91,7 +91,7 @@ export function decidirLadrón(
 /**
  * Acción forzada para cuando expira el temporizador de inactividad de un jugador.
  * En PRE_TIRADA: tira los dados.
- * En MOVER_LADRON: mueve el ladrón al desierto (o a la primera casilla válida) sin robar.
+ * En MOVER_LADRON: mueve el ladrón a una casilla sin víctimas (o, si no hay, roba a la primera).
  * En FASE_PRINCIPAL: termina el turno.
  */
 export function decidirSaltoInactividad(mesa: Mesa, estado: Estado, accion: Accion): Decision {
@@ -109,14 +109,20 @@ export function decidirSaltoInactividad(mesa: Mesa, estado: Estado, accion: Acci
   }
 
   if (estado.fase === 'MOVER_LADRON') {
-    // Mueve a una casilla válida diferente de la actual sin robar
+    // Una casilla distinta de la actual. Se prefiere una sin víctimas posibles: si no, el motor
+    // exigiría elegir a quién robar y la jugada forzada se rechazaría una y otra vez (la partida
+    // se quedaría parada en ese 7). Solo si todas tienen víctima se roba a la primera.
     const actual = estado.ladron ? clave(estado.ladron) : null;
+    const candidatas = mesa.mapa.casillas.filter((c) => clave(c) !== actual);
     const destinoHex =
-      mesa.mapa.casillas.find((c) => clave(c) !== actual) ?? mesa.mapa.casillas[0]!;
+      candidatas.find((c) => victimasPosibles(mesa, estado, accion.jugador, c).length === 0) ??
+      candidatas[0] ??
+      mesa.mapa.casillas[0]!;
+    const [victima = null] = victimasPosibles(mesa, estado, accion.jugador, destinoHex);
     return decidirLadrón(
       mesa,
       estado,
-      { tipo: 'MOVER_LADRON', jugador: accion.jugador, destino: destinoHex, victima: null },
+      { tipo: 'MOVER_LADRON', jugador: accion.jugador, destino: destinoHex, victima },
       'INACTIVIDAD',
     );
   }

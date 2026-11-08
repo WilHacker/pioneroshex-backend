@@ -42,6 +42,10 @@ export function decidirProponerTrato(estado: Estado, accion: Accion): Decision {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
   }
 
+  if (estado.config.modoComercio === 'SOLO_BANCO') {
+    return { ok: false, motivo: 'NO_PUEDES_COMERCIAR' };
+  }
+
   const proponente = estado.jugadores.find((j) => j.id === accion.jugador);
   if (!proponente) {
     return { ok: false, motivo: 'JUGADOR_DESCONOCIDO' };
@@ -51,6 +55,10 @@ export function decidirProponerTrato(estado: Estado, accion: Accion): Decision {
   const esEnTurno = accion.jugador === jugadorEnTurno;
   const destinatario = accion.destinatario ?? null;
 
+  // En el comercio privado no hay ofertas abiertas: hay que elegir con quién se comercia.
+  if (destinatario === null && estado.config.modoComercio === 'PRIVADO') {
+    return { ok: false, motivo: 'DESTINATARIO_INVALIDO' };
+  }
   if (destinatario !== null) {
     const existeDestinatario = estado.jugadores.some((j) => j.id === destinatario);
     if (!existeDestinatario || destinatario === accion.jugador) {
@@ -61,6 +69,11 @@ export function decidirProponerTrato(estado: Estado, accion: Accion): Decision {
   // Solo el jugador en turno puede iniciar propuestas de trato
   if (!esEnTurno) {
     return { ok: false, motivo: 'NO_ES_TU_TURNO' };
+  }
+
+  const tope = estado.config.maxOfertasPorTurno;
+  if (tope > 0 && estado.ofertasEsteTurno >= tope) {
+    return { ok: false, motivo: 'DEMASIADAS_OFERTAS' };
   }
 
   const entrega = normalizar(accion.entrega);

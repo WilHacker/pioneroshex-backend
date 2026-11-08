@@ -237,8 +237,11 @@ const CANDIDATAS: Record<Accion['tipo'], Candidatas> = {
     { tipo: 'PASAR_CONSTRUCCION_ESPECIAL', jugador },
   ],
   TERMINAR_TURNO: (_mesa, jugador) => [{ tipo: 'TERMINAR_TURNO', jugador }],
+  // No es una jugada que ofrecer: ni la ayuda ni el bot ni el piloto deben elegirla nunca.
+  ABANDONAR: () => [],
 };
-const TIPOS = Object.keys(CANDIDATAS) as Accion['tipo'][];
+const SIN_AYUDA: ReadonlySet<Accion['tipo']> = new Set(['ABANDONAR']);
+const TIPOS = (Object.keys(CANDIDATAS) as Accion['tipo'][]).filter((t) => !SIN_AYUDA.has(t));
 
 /**
  * 'general': `decidir` lo comprueba antes de mirar la posición, así que vale para el tipo entero.
@@ -281,6 +284,7 @@ const ALCANCE: Readonly<Record<MotivoAccion, 'general' | 'lugar'>> = {
   TRATO_NO_DIRIGIDO_A_TI: 'general',
   YA_RECHAZADO: 'general',
   NO_PUEDES_COMERCIAR: 'general',
+  DEMASIADAS_OFERTAS: 'general',
   MAZO_AGOTADO: 'general',
   NO_TIENES_ESA_CARTA: 'general',
   CARTA_COMPRADA_ESTE_TURNO: 'general',

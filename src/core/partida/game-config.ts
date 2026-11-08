@@ -6,16 +6,51 @@ export const JUGADORES_MAX = 12;
 /** Puntos para ganar en el juego clásico y mínimo permitido al personalizarlos. */
 export const PUNTOS_VICTORIA_CLASICO = 10;
 export const PUNTOS_VICTORIA_MIN = 3;
+/** Con «ladrón amistoso», solo se roba a quien tiene al menos estos puntos (públicos). */
+export const PUNTOS_LADRON_AMISTOSO = 3;
 
 /** A: sube el límite de mano y no hay pausas. B: clásica, con construcción especial (5+ jugadores). */
 export type TurnRuleMode = 'A' | 'B';
 
 const MODOS: ReadonlySet<string> = new Set<TurnRuleMode>(['A', 'B']);
 
-/** AZAR: cada tirada es independiente. EQUILIBRADO: en cada 36 tiradas sale cada combinación una vez. */
-export type ModoDados = 'AZAR' | 'EQUILIBRADO';
+/** AZAR, EQUILIBRADO (36 tiradas, cada combinación una vez), BARAJA (se rebaraja antes de agotarse), SIN_RACHAS. */
+export type ModoDados = 'AZAR' | 'EQUILIBRADO' | 'BARAJA' | 'SIN_RACHAS';
 
-const MODOS_DADOS: ReadonlySet<string> = new Set<ModoDados>(['AZAR', 'EQUILIBRADO']);
+const MODOS_DADOS: ReadonlySet<string> = new Set<ModoDados>([
+  'AZAR',
+  'EQUILIBRADO',
+  'BARAJA',
+  'SIN_RACHAS',
+]);
+
+/** Con «arranque protegido», no sale ningún 7 durante estas rondas (una tirada por jugador cada una). */
+export const RONDAS_ARRANQUE_PROTEGIDO = 2;
+
+/**
+ * Quién empieza y en qué orden se juega.
+ * ALEATORIO: se baraja con la semilla. TIRADA: como el Monopoly, cada uno tira dos dados y el más
+ * alto va primero (los empates repiten entre ellos). ENTRADA: por orden de llegada a la sala.
+ */
+export type OrdenDeTurno = 'ALEATORIO' | 'TIRADA' | 'ENTRADA';
+
+/**
+ * Cómo se comercia entre jugadores. LIBRE: ofertas abiertas o dirigidas, visibles para todos.
+ * PRIVADO: toda oferta va dirigida a alguien y solo la ven los dos implicados.
+ * SOLO_BANCO: no hay tratos entre jugadores; solo se cambia con el banco.
+ */
+export type ModoComercio = 'LIBRE' | 'PRIVADO' | 'SOLO_BANCO';
+
+const MODOS_COMERCIO: ReadonlySet<string> = new Set<ModoComercio>([
+  'LIBRE',
+  'PRIVADO',
+  'SOLO_BANCO',
+]);
+
+/** Tope máximo que se puede fijar de ofertas por turno (0 es sin tope). */
+export const OFERTAS_POR_TURNO_MAX = 20;
+
+const ORDENES: ReadonlySet<string> = new Set<OrdenDeTurno>(['ALEATORIO', 'TIRADA', 'ENTRADA']);
 
 /** Hasta aquí se juega en el mapa clásico (radio 2). Más jugadores, mapa más grande. */
 const JUGADORES_MAPA_CLASICO = 4;
@@ -62,6 +97,20 @@ export interface GameConfig {
   readonly puntosVictoria: number;
   /** Cómo salen los dados. */
   readonly modoDados: ModoDados;
+  /** Cómo se decide quién juega primero y el orden de los turnos. */
+  readonly ordenDeTurno: OrdenDeTurno;
+  /** Ladrón amistoso: no se puede robar a quien tiene menos de `PUNTOS_LADRON_AMISTOSO` puntos. */
+  readonly ladronAmistoso: boolean;
+  /** Cómo se comercia entre jugadores. */
+  readonly modoComercio: ModoComercio;
+  /** Sin 7 en las primeras `RONDAS_ARRANQUE_PROTEGIDO` rondas. */
+  readonly arranqueProtegido: boolean;
+  /** No se enseña cuántas cartas quedan en el banco ni en el mazo de desarrollo. */
+  readonly ocultarBanco: boolean;
+  /** Las cartas de recursos de todos son visibles (las de desarrollo siguen secretas). */
+  readonly manosVisibles: boolean;
+  /** Ofertas que puede hacer por turno quien tiene el turno; 0 es sin tope. */
+  readonly maxOfertasPorTurno: number;
 }
 
 /**
@@ -126,6 +175,13 @@ export function crearGameConfig(entrada: GameConfigEntrada): GameConfig {
       (esMapaGrande && turnRuleMode === 'A' ? LIMITE_MANO_MODO_A_GRANDE : LIMITE_MANO_CLASICO),
     puntosVictoria: entrada.puntosVictoria ?? PUNTOS_VICTORIA_CLASICO,
     modoDados: entrada.modoDados ?? 'AZAR',
+    ordenDeTurno: entrada.ordenDeTurno ?? 'ALEATORIO',
+    ladronAmistoso: entrada.ladronAmistoso ?? false,
+    modoComercio: entrada.modoComercio ?? 'LIBRE',
+    arranqueProtegido: entrada.arranqueProtegido ?? false,
+    ocultarBanco: entrada.ocultarBanco ?? false,
+    manosVisibles: entrada.manosVisibles ?? false,
+    maxOfertasPorTurno: entrada.maxOfertasPorTurno ?? 0,
   };
 
   validar(config);
@@ -154,7 +210,43 @@ function validar(config: GameConfig): void {
     throw new Error(`turnRuleMode debe ser 'A' o 'B', no '${String(config.turnRuleMode)}'`);
   }
   if (!MODOS_DADOS.has(config.modoDados)) {
-    throw new Error(`modoDados debe ser 'AZAR' o 'EQUILIBRADO', no '${String(config.modoDados)}'`);
+    throw new Error(
+      `modoDados debe ser 'AZAR', 'EQUILIBRADO', 'BARAJA' o 'SIN_RACHAS', no '${String(config.modoDados)}'`,
+    );
+  }
+  if (typeof config.ladronAmistoso !== 'boolean') {
+    throw new Error(
+      `ladronAmistoso debe ser verdadero o falso, no '${String(config.ladronAmistoso)}'`,
+    );
+  }
+  for (const campo of ['ocultarBanco', 'manosVisibles'] as const) {
+    if (typeof config[campo] !== 'boolean') {
+      throw new Error(`${campo} debe ser verdadero o falso, no '${String(config[campo])}'`);
+    }
+  }
+  if (typeof config.arranqueProtegido !== 'boolean') {
+    throw new Error(
+      `arranqueProtegido debe ser verdadero o falso, no '${String(config.arranqueProtegido)}'`,
+    );
+  }
+  if (!MODOS_COMERCIO.has(config.modoComercio)) {
+    throw new Error(
+      `modoComercio debe ser 'LIBRE', 'PRIVADO' o 'SOLO_BANCO', no '${String(config.modoComercio)}'`,
+    );
+  }
+  if (
+    !Number.isInteger(config.maxOfertasPorTurno) ||
+    config.maxOfertasPorTurno < 0 ||
+    config.maxOfertasPorTurno > OFERTAS_POR_TURNO_MAX
+  ) {
+    throw new Error(
+      `maxOfertasPorTurno debe ser un entero de 0 a ${OFERTAS_POR_TURNO_MAX}, no ${config.maxOfertasPorTurno}`,
+    );
+  }
+  if (!ORDENES.has(config.ordenDeTurno)) {
+    throw new Error(
+      `ordenDeTurno debe ser 'ALEATORIO', 'TIRADA' o 'ENTRADA', no '${String(config.ordenDeTurno)}'`,
+    );
   }
   if (!Number.isInteger(config.radio) || config.radio < 0) {
     throw new Error(`El radio debe ser un entero de 0 en adelante, no ${config.radio}`);

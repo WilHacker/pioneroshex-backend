@@ -1,6 +1,7 @@
 import { crearRng, mezclar } from '../reglas/azar.js';
 import { limitesDePiezas } from '../reglas/costos.js';
 import { crearMazo } from '../reglas/mazo.js';
+import { ordenPorDados, type TiradaDeSorteo } from '../reglas/orden.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import type { Mesa } from './mesa.js';
 import type { Estado, Jugador, JugadorId } from './tipos.js';
@@ -24,11 +25,29 @@ function validarIds(mesa: Mesa, ids: readonly JugadorId[]): void {
   }
 }
 
+/** El orden de turno según el modo de la sala, y las tiradas del sorteo si lo hubo. */
+function decidirOrden(
+  ids: readonly JugadorId[],
+  modo: Mesa['config']['ordenDeTurno'],
+  semillaAzar: string,
+): { orden: readonly JugadorId[]; rondas: readonly (readonly TiradaDeSorteo[])[] } {
+  switch (modo) {
+    case 'ENTRADA':
+      return { orden: [...ids], rondas: [] };
+    case 'TIRADA': {
+      const { orden, rondas } = ordenPorDados(ids, semillaAzar);
+      return { orden, rondas };
+    }
+    default:
+      return { orden: mezclar(ids, crearRng(`${semillaAzar}:orden`)), rondas: [] };
+  }
+}
+
 /** Estado inicial: orden de turno según la semilla, sin recursos y listo para la preparación. */
 export function crearPartida(mesa: Mesa, ids: readonly JugadorId[]): Estado {
   validarIds(mesa, ids);
   const { config } = mesa;
-  const orden = mezclar(ids, crearRng(`${config.semillaAzar}:orden`));
+  const { orden, rondas: sorteo } = decidirOrden(ids, config.ordenDeTurno, config.semillaAzar);
   const jugadores: Jugador[] = orden.map((id) => ({
     id,
     recursos: porRecurso(0),
@@ -64,5 +83,8 @@ export function crearPartida(mesa: Mesa, ids: readonly JugadorId[]): Estado {
     tiradas: 0,
     version: 0,
     ganador: null,
+    abandonados: [],
+    sorteo,
+    ofertasEsteTurno: 0,
   };
 }

@@ -12,8 +12,7 @@ export function aplicar(mesa: Mesa, estado: Estado, accion: Accion): Resultado {
   // La victoria se explica con el estado final: así el desglose incluye lo que cambió en la jugada.
   const eventos = decision.eventos.map((evento): Evento => {
     if (evento.tipo !== 'PARTIDA_GANADA') return evento;
-    const { jugador, puntos } = evento;
-    return { tipo: 'PARTIDA_GANADA', jugador, puntos, desglose: desglosePuntos(final, jugador) };
+    return { ...evento, desglose: desglosePuntos(final, evento.jugador) };
   });
   return { ok: true, estado: final, eventos };
 }

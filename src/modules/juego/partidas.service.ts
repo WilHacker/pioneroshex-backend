@@ -75,7 +75,22 @@ export class PartidasService {
   ): PartidaActor {
     if (this.partidas.has(id)) throw new Error(`La partida "${id}" ya existe`);
     this.comprobarTope();
-    const actor = new PartidaActor(mesa, estado, { incluirAcciones: true, ...opcionesActor });
+    // Lo guardado antes de que existieran `abandonados` y `sorteo` no los trae: se completan sin
+    // tocar lo demás (y sin copiar el estado si ya están).
+    const completo =
+      Object.hasOwn(estado, 'abandonados') &&
+      Object.hasOwn(estado, 'sorteo') &&
+      Object.hasOwn(estado, 'ofertasEsteTurno');
+    const guardado: Partial<Estado> = estado;
+    const actual: Estado = completo
+      ? estado
+      : {
+          ...estado,
+          abandonados: guardado.abandonados ?? [],
+          sorteo: guardado.sorteo ?? [],
+          ofertasEsteTurno: guardado.ofertasEsteTurno ?? 0,
+        };
+    const actor = new PartidaActor(mesa, actual, { incluirAcciones: true, ...opcionesActor });
     this.partidas.set(id, actor);
     return actor;
   }
@@ -88,6 +103,8 @@ export class PartidasService {
     const quitadas: string[] = [];
     for (const [id, actor] of this.partidas) {
       if (actor.suscriptores === 0 && ahora - actor.ultimaActividad > maxInactivoMs) {
+        // Sin detenerla, su reloj y su piloto seguirían vivos aunque ya nadie pueda llegar a ella.
+        actor.detener();
         this.partidas.delete(id);
         quitadas.push(id);
       }

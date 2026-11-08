@@ -117,6 +117,11 @@ function granRutaCoherente(estado: Estado): string[] {
 /** El ganador tiene, contando sus cartas ocultas, al menos los puntos de victoria de la partida. */
 function ganadorAlcanzaMeta(estado: Estado): string[] {
   if (estado.ganador === null) return [];
+  // Ganar porque todos los demás abandonaron no exige llegar a la meta.
+  const ganoPorAbandono =
+    !estado.abandonados.includes(estado.ganador) &&
+    estado.abandonados.length === estado.jugadores.length - 1;
+  if (ganoPorAbandono) return [];
   const puntos = puntosDe(estado, estado.ganador, { incluirOcultos: true });
   return puntos >= estado.config.puntosVictoria
     ? []

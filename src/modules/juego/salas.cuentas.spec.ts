@@ -1,4 +1,3 @@
-import { HttpException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { RepositorioHistorialMemoria } from '../../infra/historial/repositorio-historial.memoria.js';
 import { RepositorioSalasMemoria } from '../../infra/salas/repositorio-salas.memoria.js';
@@ -12,15 +11,6 @@ function crear() {
   const hacer = () => new SalasService(partidas, repo, { ahora: () => 5_000, historial });
   return { repo, partidas, historial, salas: hacer(), hacer };
 }
-
-const estado = async (promesa: Promise<unknown>): Promise<number> => {
-  try {
-    await promesa;
-  } catch (e) {
-    return (e as HttpException).getStatus();
-  }
-  throw new Error('no falló');
-};
 
 /** Una sala con Ana (cuenta u-ana) y Beto (invitado) ya empezada. */
 async function partidaEmpezada() {
@@ -44,20 +34,22 @@ describe('SalasService: cuentas en las salas', () => {
     expect(JSON.stringify(salas.estado(a.salaId))).not.toContain('u-ana');
   });
 
-  it('una misma cuenta no puede ocupar dos asientos de la misma sala (409)', async () => {
+  it('una misma cuenta no ocupa dos asientos: al volver recupera el suyo', async () => {
     const { salas } = crear();
     const a = await salas.crear('Ana', false, 'u-ana');
 
-    expect(await estado(salas.unirse(a.salaId, 'Ana otra vez', 'u-ana'))).toBe(409);
+    const otra = await salas.unirse(a.salaId, 'Ana otra vez', 'u-ana');
+    expect(otra.jugadorId).toBe(a.jugadorId);
+    expect(salas.estado(a.salaId).jugadores).toHaveLength(1);
     await expect(salas.unirse(a.salaId, 'Beto', 'u-beto')).resolves.toBeDefined();
   });
 
-  it('los invitados pueden repetir nombre: no tienen cuenta que comparar', async () => {
+  it('los invitados tampoco pueden repetir nombre en la misma sala', async () => {
     const { salas } = crear();
     const a = await salas.crear('Ana');
 
-    await expect(salas.unirse(a.salaId, 'Ana')).resolves.toBeDefined();
-    await expect(salas.unirse(a.salaId, 'Ana')).resolves.toBeDefined();
+    await expect(salas.unirse(a.salaId, 'Ana')).rejects.toThrow('Ya hay alguien con ese nombre');
+    await expect(salas.unirse(a.salaId, 'Beto')).resolves.toBeDefined();
   });
 });
 

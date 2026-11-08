@@ -79,6 +79,8 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
       return;
     }
     case 'TRATO_PROPUESTO':
+      // Solo cuentan para el tope las ofertas de quien tiene el turno, no las contraofertas.
+      if (evento.trato.contraofertaDe === undefined) estado.ofertasEsteTurno += 1;
       estado.tratos.push({
         ...evento.trato,
         entrega: { ...evento.trato.entrega },
@@ -128,6 +130,7 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
       estado.fase = 'CONSTRUCCION_ESPECIAL';
       estado.turnoEspecialDe = evento.primerConstructor;
       estado.tratos = [];
+      estado.ofertasEsteTurno = 0;
       return;
     case 'CONSTRUCCION_ESPECIAL_PASADA':
       if (evento.siguienteConstructor !== null) {
@@ -151,6 +154,7 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
         }
       }
       estado.cartaJugadaEsteTurno = false;
+      estado.ofertasEsteTurno = 0;
       estado.turnoDe = evento.siguiente;
       estado.fase = 'PRE_TIRADA';
       estado.dados = null;
@@ -225,6 +229,10 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
     case 'GRAN_RUTA_CAMBIADA':
       estado.granRuta = evento.nuevoTitular;
       estado.longitudGranRuta = evento.longitud;
+      return;
+    case 'JUGADOR_ABANDONO':
+      jugadorDe(estado, evento.jugador);
+      if (!estado.abandonados.includes(evento.jugador)) estado.abandonados.push(evento.jugador);
       return;
     case 'PARTIDA_GANADA':
       jugadorDe(estado, evento.jugador);

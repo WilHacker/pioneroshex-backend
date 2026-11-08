@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import {
   ayuda,
+  enumerarAcciones,
   SITIOS_VACIOS,
   type AccionDisponible,
   type Sitios,
@@ -15,6 +16,8 @@ import {
 } from '../../core/estado/paso.js';
 import type { Accion, Estado, Evento, Rechazo } from '../../core/estado/tipos.js';
 import { vistaPara, type Vista } from '../../core/estado/vista.js';
+import { crearRng } from '../../core/reglas/azar.js';
+import { elegirAccion } from '../../core/simulacion/bot.js';
 
 /** Recibe lo que ve un observador tras cada jugada aceptada. */
 export type Escucha = (notificacion: Notificacion) => void;
@@ -29,7 +32,26 @@ export interface OpcionesActor extends OpcionesPaso {
    * descarta, mueve el ladrón o termina el turno). Sin valor o 0, no hay límite.
    */
   readonly limiteTurnoMs?: number | undefined;
+  /** Cuánto se espera a un jugador desconectado antes de jugar por él. */
+  readonly graciaAusenteMs?: number | undefined;
+  /** Tiempo entre jugadas del piloto una vez pasada la gracia. */
+  readonly ritmoPilotoMs?: number | undefined;
 }
+
+/** Una caída corta o recargar la página no debe costarle el turno a nadie. */
+export const GRACIA_AUSENTE_MS = 60_000;
+/** Pasada la gracia, el piloto juega a este ritmo para no hacer esperar a los demás. */
+export const RITMO_PILOTO_MS = 2_000;
+
+/** Quién está en la partida y a quién juega el piloto automático. Ids en el orden de turno. */
+export interface Presencia {
+  readonly conectados: readonly string[];
+  readonly piloto: readonly string[];
+  /** Quienes dejaron la partida a propósito (también van en piloto mientras haya alguien). */
+  readonly abandonaron: readonly string[];
+}
+
+export type OyenteDePresencia = (presencia: Presencia) => void;
 
 /** En la preparación no hay reloj: no existe una jugada segura que hacer por quien no coloca. */
 const FASES_CON_RELOJ: ReadonlySet<Estado['fase']> = new Set([
@@ -66,6 +88,10 @@ export class PartidaActor {
   private temporizador: NodeJS.Timeout | undefined;
   private venceEn: number | null = null;
   private detenido = false;
+  /** Desde cuándo no tiene ninguna conexión cada jugador desconectado. */
+  private readonly ausenteDesde = new Map<string, number>();
+  private readonly oyentesDePresencia = new Set<OyenteDePresencia>();
+  private temporizadorPiloto: NodeJS.Timeout | undefined;
   /** El tablero no cambia con las jugadas: se calcula una vez. */
   readonly mesaPublica: MesaPublica;
 
@@ -76,6 +102,8 @@ export class PartidaActor {
   ) {
     this.actual = estadoInicial;
     this.ultimaActividadMs = this.ahora();
+    // Al empezar nadie está conectado: quien nunca llegue también acabará en piloto.
+    for (const j of estadoInicial.jugadores) this.ausenteDesde.set(j.id, this.ultimaActividadMs);
     this.mesaPublica = mesaPublica(mesa);
     this.programarReloj();
   }
@@ -112,8 +140,8 @@ export class PartidaActor {
   }
 
   /** Encola la acción; la promesa se resuelve cuando le toca y se ha procesado. */
-  enviar(accion: Accion): Promise<ResultadoEnvio> {
-    const tarea = this.cola.then(() => this.procesar(accion));
+  enviar(accion: Accion, forzada = false): Promise<ResultadoEnvio> {
+    const tarea = this.cola.then(() => this.procesar(accion, forzada));
     // La cola sigue aunque esta tarea falle; el error le llega igualmente a quien la envió.
     this.cola = tarea.catch(() => undefined);
     return tarea;
@@ -149,19 +177,158 @@ export class PartidaActor {
     }
     const entrada = { escucha };
     const conjunto = this.escuchas.get(observador) ?? new Set();
+    const eraNuevo = conjunto.size === 0;
     conjunto.add(entrada);
     this.escuchas.set(observador, conjunto);
     this.ultimaActividadMs = this.ahora();
+    if (eraNuevo && observador !== null) {
+      this.ausenteDesde.delete(observador);
+      this.alCambiarLaPresencia();
+    }
     return () => {
       this.ultimaActividadMs = this.ahora();
       const actuales = this.escuchas.get(observador);
       if (!actuales) return;
       actuales.delete(entrada);
-      if (actuales.size === 0) this.escuchas.delete(observador);
+      if (actuales.size > 0) return;
+      this.escuchas.delete(observador);
+      if (observador !== null) {
+        this.ausenteDesde.set(observador, this.ahora());
+        this.alCambiarLaPresencia();
+      }
     };
   }
 
-  private procesar(accion: Accion): ResultadoEnvio {
+  /** Quién está conectado y a quién juega el piloto automático ahora mismo. */
+  presencia(): Presencia {
+    const ids = this.actual.jugadores.map((j) => j.id);
+    const conectados = ids.filter((id) => this.estaConectado(id));
+    const piloto =
+      conectados.length === 0 || this.actual.fase === 'FIN'
+        ? []
+        : ids.filter((id) => !this.estaConectado(id) && this.graciaVencida(id));
+    return { conectados, piloto, abandonaron: [...this.actual.abandonados] };
+  }
+
+  /** Avisa cada vez que alguien se conecta o desconecta, o el piloto empieza a jugar por alguien. */
+  alCambiarPresencia(oyente: OyenteDePresencia): () => void {
+    this.oyentesDePresencia.add(oyente);
+    return () => void this.oyentesDePresencia.delete(oyente);
+  }
+
+  private haAbandonado(id: string): boolean {
+    return this.actual.abandonados.includes(id);
+  }
+
+  /** Quien abandonó no cuenta como conectado aunque conserve la pestaña abierta. */
+  private estaConectado(id: string): boolean {
+    return !this.haAbandonado(id) && (this.escuchas.get(id)?.size ?? 0) > 0;
+  }
+
+  private graciaVencida(id: string): boolean {
+    if (this.haAbandonado(id)) return true;
+    const desde = this.ausenteDesde.get(id);
+    return desde !== undefined && this.ahora() - desde >= this.graciaMs;
+  }
+
+  private get graciaMs(): number {
+    return this.opciones.graciaAusenteMs ?? GRACIA_AUSENTE_MS;
+  }
+
+  private alCambiarLaPresencia(): void {
+    this.programarPiloto();
+    const presencia = this.presencia();
+    for (const oyente of this.oyentesDePresencia) {
+      try {
+        oyente(presencia);
+      } catch (error: unknown) {
+        const mensaje = error instanceof Error ? error.message || error.name : String(error);
+        this.logger.error(`Falló un oyente de presencia: ${mensaje}`);
+      }
+    }
+  }
+
+  /** A quién le toca actuar ahora (varios en el descarte; nadie al terminar). */
+  private quienDebeActuar(): string[] {
+    const estado = this.actual;
+    if (estado.fase === 'FIN') return [];
+    if (estado.fase === 'DESCARTE') return Object.keys(estado.descartesPendientes);
+    const indice =
+      estado.fase === 'CONSTRUCCION_ESPECIAL' ? estado.turnoEspecialDe : estado.turnoDe;
+    const jugador = indice === null ? undefined : estado.jugadores[indice]?.id;
+    return jugador === undefined ? [] : [jugador];
+  }
+
+  /**
+   * Si a quien le toca no está conectado y hay alguien esperando, programa el piloto: cuando se
+   * le acabe la gracia, y después a ritmo corto. Sin nadie conectado la partida se congela.
+   */
+  private programarPiloto(): void {
+    clearTimeout(this.temporizadorPiloto);
+    this.temporizadorPiloto = undefined;
+    if (this.detenido || this.actual.fase === 'FIN') return;
+    if (!this.actual.jugadores.some((j) => this.estaConectado(j.id))) return;
+    const ausentes = this.quienDebeActuar().filter((id) => !this.estaConectado(id));
+    if (ausentes.length === 0) return;
+    const ritmo = this.opciones.ritmoPilotoMs ?? RITMO_PILOTO_MS;
+    const ahora = this.ahora();
+    const espera = Math.min(
+      ...ausentes.map((id) =>
+        this.haAbandonado(id) ? 0 : (this.ausenteDesde.get(id) ?? ahora) + this.graciaMs - ahora,
+      ),
+    );
+    const version = this.actual.version;
+    this.temporizadorPiloto = setTimeout(
+      () => void this.juegaElPiloto(version),
+      Math.max(espera, ritmo),
+    );
+    this.temporizadorPiloto.unref();
+  }
+
+  /** Pasó la gracia: se juega por los ausentes a quienes les toca, con jugadas que el motor acepta. */
+  private async juegaElPiloto(version: number): Promise<void> {
+    if (this.detenido || this.actual.version !== version) return;
+    const ids = this.quienDebeActuar().filter(
+      (id) => !this.estaConectado(id) && this.graciaVencida(id),
+    );
+    try {
+      for (const accion of this.accionesDelPiloto(ids)) {
+        // En serie a propósito: cada jugada se apoya en el estado que dejó la anterior.
+        // oxlint-disable-next-line no-await-in-loop
+        const resultado = await this.enviar(accion, true);
+        if (!resultado.ok)
+          this.logger.warn(`El motor rechazó la jugada del piloto (${resultado.motivo})`);
+      }
+    } catch (error: unknown) {
+      const mensaje = error instanceof Error ? error.message || error.name : String(error);
+      this.logger.error(`Falló la jugada del piloto: ${mensaje}`);
+    }
+    // Se avisa de que el piloto está jugando y se reprograma (también si se rechazó la jugada).
+    this.alCambiarLaPresencia();
+  }
+
+  private accionesDelPiloto(ids: readonly string[]): Accion[] {
+    const estado = this.actual;
+    if (estado.fase === 'DESCARTE') {
+      return ids.map((jugador) => ({ tipo: 'DESCARTE_AUTOMATICO', jugador }));
+    }
+    const [jugador] = ids;
+    if (jugador === undefined) return [];
+    if (estado.fase === 'PREPARACION_POBLADO' || estado.fase === 'PREPARACION_CAMINO') {
+      // En la preparación no hay jugada «de inactividad»: se coloca una pieza legal cualquiera.
+      const legales = enumerarAcciones(this.mesa, estado, jugador);
+      if (legales.length === 0) return [];
+      const rng = crearRng(`${estado.config.semillaAzar}:piloto:${estado.version}`);
+      return [elegirAccion(legales, rng)];
+    }
+    return [{ tipo: 'SALTAR_TURNO_POR_INACTIVIDAD', jugador }];
+  }
+
+  /**
+   * `forzada`: la juega el servidor (reloj o piloto), no una persona. No cuenta como actividad: si
+   * no, una partida abandonada se jugaría sola y no caducaría nunca.
+   */
+  private procesar(accion: Accion, forzada: boolean): ResultadoEnvio {
     const resultado = paso(
       this.mesa,
       this.actual,
@@ -171,9 +338,10 @@ export class PartidaActor {
     );
     if (!resultado.ok) return resultado;
     this.actual = resultado.estado;
-    this.ultimaActividadMs = this.ahora();
+    if (!forzada) this.ultimaActividadMs = this.ahora();
     // Antes de avisar: así cada notificación ya lleva el tiempo que le queda al siguiente.
     this.programarReloj();
+    if (accion.tipo === 'ABANDONAR') this.alCambiarLaPresencia();
     this.persistir(resultado.estado);
     for (const notificacion of resultado.notificaciones) {
       // Copia a propósito: un suscriptor puede darse de baja mientras se avisa.
@@ -188,6 +356,7 @@ export class PartidaActor {
     clearTimeout(this.temporizador);
     this.temporizador = undefined;
     this.venceEn = null;
+    this.programarPiloto();
     const limite = this.opciones.limiteTurnoMs;
     if (this.detenido || !limite || limite <= 0 || !FASES_CON_RELOJ.has(this.actual.fase)) return;
     this.venceEn = this.ahora() + limite;
@@ -204,7 +373,7 @@ export class PartidaActor {
       for (const accion of this.accionesPorInactividad()) {
         // En serie a propósito: cada jugada forzada se apoya en el estado que dejó la anterior.
         // oxlint-disable-next-line no-await-in-loop
-        const resultado = await this.enviar(accion);
+        const resultado = await this.enviar(accion, true);
         if (!resultado.ok) {
           this.logger.warn(`El motor rechazó la jugada por inactividad (${resultado.motivo})`);
         }

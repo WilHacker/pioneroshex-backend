@@ -6,6 +6,7 @@ import {
   HttpCode,
   Inject,
   Param,
+  Delete,
   Patch,
   Post,
   UseGuards,
@@ -15,6 +16,7 @@ import { OrigenGuard } from '../cuentas/origen.guard.js';
 import { LimiteHttpGuard } from '../../infra/http/limite-http.guard.js';
 import {
   esquemaCambiarSala,
+  esquemaCederAnfitrion,
   esquemaCrearSala,
   esquemaEmpezar,
   esquemaUnirse,
@@ -50,10 +52,10 @@ export class SalasController {
     @Body() cuerpo: unknown,
     @Headers('cookie') cookie: string | undefined,
   ): Promise<Credencial> {
-    const { nombre, publica } = validar(esquemaCrearSala, cuerpo);
+    const { nombre, publica, ...reglas } = validar(esquemaCrearSala, cuerpo);
     // Con sesión iniciada, el jugador es su cuenta y se usa el nombre de la cuenta.
     const usuario = await this.cuentas.usuarioDeCookie(cookie);
-    return this.salas.crear(usuario?.nombre ?? nombre, publica, usuario?.id);
+    return this.salas.crear(usuario?.nombre ?? nombre, publica, usuario?.id, reglas);
   }
 
   // Antes de ':id' y de 'resumen' por la misma razón: el orden decide qué ruta gana.
@@ -94,6 +96,39 @@ export class SalasController {
     @Body() cuerpo: unknown,
   ): Promise<void> {
     await this.salas.cambiar(id, tokenDe(autorizacion), validar(esquemaCambiarSala, cuerpo ?? {}));
+  }
+
+  @Post(':id/salir')
+  @HttpCode(204)
+  @UseGuards(LimiteHttpGuard)
+  async salir(
+    @Param('id') id: string,
+    @Headers('authorization') autorizacion: string | undefined,
+  ): Promise<void> {
+    await this.salas.salir(id, tokenDe(autorizacion));
+  }
+
+  @Delete(':id/jugadores/:jugadorId')
+  @HttpCode(204)
+  @UseGuards(LimiteHttpGuard)
+  async expulsar(
+    @Param('id') id: string,
+    @Param('jugadorId') jugadorId: string,
+    @Headers('authorization') autorizacion: string | undefined,
+  ): Promise<void> {
+    await this.salas.expulsar(id, tokenDe(autorizacion), jugadorId);
+  }
+
+  @Post(':id/anfitrion')
+  @HttpCode(204)
+  @UseGuards(LimiteHttpGuard)
+  async cederAnfitrion(
+    @Param('id') id: string,
+    @Headers('authorization') autorizacion: string | undefined,
+    @Body() cuerpo: unknown,
+  ): Promise<void> {
+    const { jugadorId } = validar(esquemaCederAnfitrion, cuerpo);
+    await this.salas.cederAnfitrion(id, tokenDe(autorizacion), jugadorId);
   }
 
   @Post(':id/empezar')

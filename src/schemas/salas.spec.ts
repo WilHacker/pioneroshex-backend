@@ -1,7 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { esquemaCrearSala, esquemaEmpezar, esquemaUnirse } from './salas.js';
+import { JUGADORES_MAX, JUGADORES_MIN } from '../core/partida/game-config.js';
+import { recomendadoPara } from '../core/partida/recomendado.js';
+import {
+  esquemaCambiarSala,
+  esquemaCrearSala,
+  esquemaEmpezar,
+  esquemaUnirse,
+  TIEMPOS_DE_TURNO,
+} from './salas.js';
 
 describe('esquemas de sala', () => {
+  const rango = Array.from(
+    { length: JUGADORES_MAX - JUGADORES_MIN + 1 },
+    (_, i) => JUGADORES_MIN + i,
+  );
+
+  it.each(rango)('para %i jugadores todo lo recomendado lo acepta el servidor', (n) => {
+    const { turnoSegundos, ...resto } = recomendadoPara(n);
+    expect(TIEMPOS_DE_TURNO).toContain(turnoSegundos);
+    expect(esquemaCambiarSala.safeParse({ ...resto, turnoSegundos }).success).toBe(true);
+  });
+
   it('el nombre se recorta y no puede quedar vacío ni pasar de 20 caracteres', () => {
     expect(esquemaUnirse.parse({ nombre: '  Ana  ' })).toEqual({ nombre: 'Ana' });
     expect(esquemaUnirse.safeParse({ nombre: '   ' }).success).toBe(false);

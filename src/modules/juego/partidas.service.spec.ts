@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { crearMesa } from '../../core/estado/mesa.js';
 import { crearIdDeSala, LimiteDePartidasError, PartidasService } from './partidas.service.js';
 
@@ -94,6 +94,21 @@ describe('PartidasService: expiración y restauración', () => {
     expect(servicio.obtener(reciente.id)).toBe(reciente.actor);
   });
 
+  it('barrer detiene el reloj y el piloto de las partidas que quita, y solo de ellas', () => {
+    let ahora = 0;
+    const servicio = new PartidasService(10);
+    const vieja = servicio.crear(IDS, {}, () => ({ ahora: () => ahora }));
+    ahora = 5000;
+    const reciente = servicio.crear(IDS, {}, () => ({ ahora: () => ahora }));
+    const detenerVieja = vi.spyOn(vieja.actor, 'detener');
+    const detenerReciente = vi.spyOn(reciente.actor, 'detener');
+
+    servicio.barrer(3000, ahora);
+
+    expect(detenerVieja).toHaveBeenCalledTimes(1);
+    expect(detenerReciente).not.toHaveBeenCalled();
+  });
+
   it('barrer respeta las partidas con alguien conectado', () => {
     const servicio = new PartidasService(10);
     const { id, actor } = servicio.crear(IDS, {}, () => ({ ahora: () => 0 }));
@@ -111,6 +126,17 @@ describe('PartidasService: expiración y restauración', () => {
       return {};
     });
     expect(visto).toBe(id);
+  });
+
+  it('restaurar admite partidas guardadas antes de que existiera «abandonados»', () => {
+    const origen = new PartidasService().crear(IDS);
+    const mesa = crearMesa(origen.actor.estado.config);
+    const { abandonados: _nuevo, ...antiguo } = origen.actor.estado;
+
+    const actor = new PartidasService().restaurar('viejo000', mesa, antiguo as never);
+
+    expect(actor.estado.abandonados).toEqual([]);
+    expect(actor.presencia().conectados).toEqual([]);
   });
 
   it('restaurar registra un actor con un id y un estado dados, respetando el tope', () => {

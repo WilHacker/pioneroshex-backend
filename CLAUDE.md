@@ -147,6 +147,13 @@ Diseño del juego:
 - Socket.io: `juego:accion` (con acuse) entra; `juego:inicio`, `juego:notificacion` y `juego:error`
   salen. El servidor fija `jugador` desde la sesión. Esquemas Zod en `src/schemas/`. Protocolo
   completo en la nota `Contrato-de-Red` del vault de Obsidian.
+- **Sala de espera y portada en vivo:** namespace `/lobby` de socket.io (`LobbyGateway`), sin sondeo. `auth`:
+  `{}` mira la portada (`portada:salas` = salas públicas abiertas + resumen); `{ salaId, token? }` mira una
+  sala (`sala:estado` = estado público + `conectados`, `sala:cerrada`, `lobby:error` con `SALA_NO_EXISTE` o
+  `PETICION_INVALIDA`). Un token que no vale entra como espectador. `SalasService.alCambiar` avisa tras cada
+  cambio y el gateway difunde; las acciones (crear, entrar, salir…) siguen por HTTP. Nunca viajan tokens.
+- **Un nombre por sala** (sin distinguir mayúsculas ni espacios): repetirlo da **409**. Una **cuenta** que vuelve a
+  entrar a la sala donde ya estaba recupera su asiento con un token nuevo (el anterior deja de valer).
 - `GET /health` → `200 {"estado":"ok","baseDatos":"ok"}` o
   `503 {"estado":"error","baseDatos":"caida"}`. El frontend lo valida con Zod.
 - Cualquier cambio de forma de una respuesta o evento se coordina en **los dos repos**.

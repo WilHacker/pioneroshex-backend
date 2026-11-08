@@ -205,18 +205,24 @@ describe('Cuentas dentro de las salas', () => {
       .expect(403);
   });
 
-  it('una cuenta no puede sentarse dos veces en la misma sala, pero un invitado sí entra', async () => {
+  it('una cuenta no se sienta dos veces: al volver recupera su asiento; un invitado distinto entra', async () => {
     const cookie = await registrar('Yago');
-    const { salaId } = (
+    const primera = (
       await request(url).post('/salas').set('Cookie', cookie).send({ nombre: 'Yago' })
     ).body as Credencial;
 
-    await request(url)
-      .post(`/salas/${salaId}/unirse`)
+    const vuelta = await request(url)
+      .post(`/salas/${primera.salaId}/unirse`)
       .set('Cookie', cookie)
       .send({ nombre: 'Yago' })
-      .expect(409);
-    await request(url).post(`/salas/${salaId}/unirse`).send({ nombre: 'Invitado' }).expect(201);
+      .expect(201);
+    expect((vuelta.body as Credencial).jugadorId).toBe(primera.jugadorId);
+    expect((vuelta.body as Credencial).token).not.toBe(primera.token);
+    await request(url)
+      .post(`/salas/${primera.salaId}/unirse`)
+      .send({ nombre: 'Invitado' })
+      .expect(201);
+    await request(url).post(`/salas/${primera.salaId}/unirse`).send({ nombre: 'Yago' }).expect(409);
   });
 
   it('las estadísticas piden sesión y, sin partidas, vienen en cero', async () => {
@@ -426,5 +432,73 @@ describe('Socket del juego', () => {
     socket.disconnect();
     await new Promise((resolver) => setTimeout(resolver, 100));
     expect(actor.suscriptores).toBe(0);
+  });
+});
+
+describe('presencia por socket', () => {
+  interface Presencia {
+    conectados: string[];
+    piloto: string[];
+    abandonaron: string[];
+  }
+
+  it('el inicio dice quién está conectado, empezando por quien entra', async () => {
+    const { a } = await partidaEmpezada();
+    const { inicio } = await conectar({ salaId: a.salaId, token: a.token });
+    expect((inicio as Inicio & { presencia: Presencia }).presencia).toEqual({
+      conectados: [a.jugadorId],
+      piloto: [],
+      abandonaron: [],
+    });
+  });
+
+  it('los demás se enteran cuando alguien entra y cuando se va', async () => {
+    const { a, b } = await partidaEmpezada();
+    const ana = await conectar({ salaId: a.salaId, token: a.token });
+
+    const alEntrar = esperar<Presencia>(ana.socket, 'juego:presencia');
+    const beto = await conectar({ salaId: b.salaId, token: b.token });
+    expect((await alEntrar).conectados.toSorted()).toEqual([a.jugadorId, b.jugadorId].toSorted());
+
+    const alSalir = esperar<Presencia>(ana.socket, 'juego:presencia');
+    beto.socket.disconnect();
+    expect((await alSalir).conectados).toEqual([a.jugadorId]);
+  });
+});
+
+describe('abandonar la partida', () => {
+  interface Aviso {
+    vista: { fase: string; ganador: string | null };
+    eventos: { tipo: string; porAbandono?: boolean }[];
+  }
+
+  it('con dos jugadores, quien se queda gana por abandono y los dos lo ven', async () => {
+    const { a, b } = await partidaEmpezada();
+    const ana = await conectar({ salaId: a.salaId, token: a.token });
+    const beto = await conectar({ salaId: b.salaId, token: b.token });
+    const aviso = esperar<Aviso>(ana.socket, 'juego:notificacion');
+
+    const respuesta = await accion(beto.socket, { tipo: 'ABANDONAR' });
+
+    expect(respuesta).toEqual({ ok: true });
+    const visto = await aviso;
+    expect(visto.vista).toMatchObject({ fase: 'FIN', ganador: a.jugadorId });
+    expect(visto.eventos.find((e) => e.tipo === 'PARTIDA_GANADA')?.porAbandono).toBe(true);
+  });
+
+  it('abandonar no depende del turno: sirve también cuando no te toca', async () => {
+    const { a, b } = await partidaEmpezada();
+    const ana = await conectar({ salaId: a.salaId, token: a.token });
+    const beto = await conectar({ salaId: b.salaId, token: b.token });
+    const { turnoDe } = ana.inicio!.vista;
+    const sinTurno = turnoDe === a.jugadorId ? beto : ana;
+    expect(await accion(sinTurno.socket, { tipo: 'ABANDONAR' })).toEqual({ ok: true });
+  });
+
+  it('un cliente no puede abandonar a nombre de otro: el jugador sale de su sesión', async () => {
+    const { a, b } = await partidaEmpezada();
+    const ana = await conectar({ salaId: a.salaId, token: a.token });
+    const rechazo = await accion(ana.socket, { tipo: 'ABANDONAR', jugador: b.jugadorId });
+    expect(rechazo).toMatchObject({ ok: false, motivo: 'ACCION_INVALIDA' });
   });
 });

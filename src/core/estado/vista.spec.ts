@@ -108,6 +108,7 @@ describe('vistaPara', () => {
         'jugadores',
         'ladron',
         'longitudGranRuta',
+        'sorteo',
         'tamanoMazo',
         'tratos',
         'turnoDe',
@@ -122,6 +123,18 @@ describe('vistaPara', () => {
         'jugadores',
         // Público a propósito: dice cómo salen los dados, no qué sale (eso depende de semillaAzar).
         'modoDados',
+        // Público a propósito: es una regla de la sala; el sorteo mismo es público en `Vista.sorteo`.
+        'ordenDeTurno',
+        // Público a propósito: es una regla de la sala que los clientes deben conocer para elegir víctima.
+        'ladronAmistoso',
+        // Públicos a propósito: son reglas de la sala; el cliente adapta lo que ofrece (ofertas dirigidas, tope).
+        'modoComercio',
+        // Público a propósito: es una regla de la sala; no revela qué sale en los dados.
+        'arranqueProtegido',
+        // Públicos a propósito: son reglas de la sala; el cliente sabe qué no le van a mandar.
+        'ocultarBanco',
+        'manosVisibles',
+        'maxOfertasPorTurno',
         'puntosVictoria',
         'radio',
         'robberHandLimit',

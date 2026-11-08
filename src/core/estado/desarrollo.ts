@@ -30,6 +30,10 @@ function validarJugable(
   return { ok: true };
 }
 
+/** Las cartas de desarrollo se pueden jugar antes de tirar los dados y en la fase principal. */
+const fasePermiteJugarCarta = (estado: Estado): boolean =>
+  estado.fase === 'FASE_PRINCIPAL' || estado.fase === 'PRE_TIRADA';
+
 export function decidirComprarCarta(_mesa: Mesa, estado: Estado, accion: Accion): Decision {
   if (accion.tipo !== 'COMPRAR_CARTA_DESARROLLO') return { ok: false, motivo: 'FASE_INCORRECTA' };
   if (estado.fase !== 'FASE_PRINCIPAL' && estado.fase !== 'CONSTRUCCION_ESPECIAL') {
@@ -159,7 +163,7 @@ export function decidirJugarCaballero(mesa: Mesa, estado: Estado, accion: Accion
 
 export function decidirJugarAbundancia(_mesa: Mesa, estado: Estado, accion: Accion): Decision {
   if (accion.tipo !== 'JUGAR_ABUNDANCIA') return { ok: false, motivo: 'FASE_INCORRECTA' };
-  if (estado.fase !== 'FASE_PRINCIPAL') return { ok: false, motivo: 'FASE_INCORRECTA' };
+  if (!fasePermiteJugarCarta(estado)) return { ok: false, motivo: 'FASE_INCORRECTA' };
 
   const validacion = validarJugable(estado, accion.jugador, 'ABUNDANCIA');
   if (!validacion.ok) return validacion;
@@ -192,7 +196,7 @@ export function decidirJugarAbundancia(_mesa: Mesa, estado: Estado, accion: Acci
 
 export function decidirJugarMonopolio(_mesa: Mesa, estado: Estado, accion: Accion): Decision {
   if (accion.tipo !== 'JUGAR_MONOPOLIO') return { ok: false, motivo: 'FASE_INCORRECTA' };
-  if (estado.fase !== 'FASE_PRINCIPAL') return { ok: false, motivo: 'FASE_INCORRECTA' };
+  if (!fasePermiteJugarCarta(estado)) return { ok: false, motivo: 'FASE_INCORRECTA' };
 
   const validacion = validarJugable(estado, accion.jugador, 'MONOPOLIO');
   if (!validacion.ok) return validacion;
@@ -227,7 +231,7 @@ export function decidirJugarConstruccionCarreteras(
   if (accion.tipo !== 'JUGAR_CONSTRUCCION_CARRETERAS') {
     return { ok: false, motivo: 'FASE_INCORRECTA' };
   }
-  if (estado.fase !== 'FASE_PRINCIPAL') return { ok: false, motivo: 'FASE_INCORRECTA' };
+  if (!fasePermiteJugarCarta(estado)) return { ok: false, motivo: 'FASE_INCORRECTA' };
 
   const validacion = validarJugable(estado, accion.jugador, 'CONSTRUCCION_CARRETERAS');
   if (!validacion.ok) return validacion;

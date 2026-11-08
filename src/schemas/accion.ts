@@ -56,6 +56,7 @@ export const esquemaAccionEntrante = z.discriminatedUnion('tipo', [
   z.strictObject({ tipo: z.literal('JUGAR_ABUNDANCIA'), recursos: z.tuple([recurso, recurso]) }),
   z.strictObject({ tipo: z.literal('JUGAR_MONOPOLIO'), recurso }),
   sinCampos('TERMINAR_TURNO'),
+  sinCampos('ABANDONAR'),
 ]);
 
 export type AccionEntrante = z.infer<typeof esquemaAccionEntrante>;

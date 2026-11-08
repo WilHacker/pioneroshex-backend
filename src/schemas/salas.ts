@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { mapaDelCatalogo } from '../core/catalogo/catalogo.js';
-import { PUNTOS_VICTORIA_MIN } from '../core/partida/game-config.js';
+import {
+  JUGADORES_MAX,
+  JUGADORES_MIN,
+  OFERTAS_POR_TURNO_MAX,
+  PUNTOS_VICTORIA_MIN,
+} from '../core/partida/game-config.js';
 
 const NOMBRE_MAX = 20;
 const PUNTOS_VICTORIA_MAX = 20;
@@ -16,7 +21,6 @@ const nombre = z
   .max(NOMBRE_MAX)
   .regex(/^[^\p{Cc}]+$/u, 'No puede llevar caracteres de control');
 
-export const esquemaCrearSala = z.strictObject({ nombre, publica: z.boolean().optional() });
 export const esquemaUnirse = z.strictObject({ nombre });
 
 /** Las reglas que el anfitrión puede fijar. `semillaAzar` no está: la genera el servidor. */
@@ -38,7 +42,14 @@ const reglas = {
   mapa,
   puntosVictoria: z.number().int().min(PUNTOS_VICTORIA_MIN).max(PUNTOS_VICTORIA_MAX).optional(),
   turnRuleMode: z.enum(['A', 'B']).optional(),
-  modoDados: z.enum(['AZAR', 'EQUILIBRADO']).optional(),
+  modoDados: z.enum(['AZAR', 'EQUILIBRADO', 'BARAJA', 'SIN_RACHAS']).optional(),
+  arranqueProtegido: z.boolean().optional(),
+  ocultarBanco: z.boolean().optional(),
+  manosVisibles: z.boolean().optional(),
+  ordenDeTurno: z.enum(['ALEATORIO', 'TIRADA', 'ENTRADA']).optional(),
+  ladronAmistoso: z.boolean().optional(),
+  modoComercio: z.enum(['LIBRE', 'PRIVADO', 'SOLO_BANCO']).optional(),
+  maxOfertasPorTurno: z.number().int().min(0).max(OFERTAS_POR_TURNO_MAX).optional(),
   robberHandLimit: z.number().int().min(LIMITE_DESCARTE_MIN).max(LIMITE_DESCARTE_MAX).optional(),
   turnoSegundos: z
     .number()
@@ -51,8 +62,26 @@ const reglas = {
 
 export const esquemaEmpezar = z.strictObject(reglas);
 
+/** Jugadores que admite la sala. Es de la sala, no de la partida: al empezar juegan los que haya. */
+const maxJugadores = z.number().int().min(JUGADORES_MIN).max(JUGADORES_MAX).optional();
+
+/** Crear la sala ya con la visibilidad, el tope de jugadores y las reglas: una sola petición. */
+export const esquemaCrearSala = z.strictObject({
+  nombre,
+  publica: z.boolean().optional(),
+  maxJugadores,
+  ...reglas,
+});
+
 /** Lo que el anfitrión cambia en la sala de espera: la visibilidad y las reglas. */
-export const esquemaCambiarSala = z.strictObject({ publica: z.boolean().optional(), ...reglas });
+export const esquemaCambiarSala = z.strictObject({
+  publica: z.boolean().optional(),
+  maxJugadores,
+  ...reglas,
+});
+
+/** A quién se le pasa el cargo de anfitrión. */
+export const esquemaCederAnfitrion = z.strictObject({ jugadorId: z.string().min(1).max(20) });
 
 export type CrearSalaEntrada = z.infer<typeof esquemaCrearSala>;
 export type UnirseEntrada = z.infer<typeof esquemaUnirse>;

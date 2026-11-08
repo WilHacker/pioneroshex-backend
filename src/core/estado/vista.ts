@@ -4,7 +4,7 @@ import type { LimitesDePiezas } from '../reglas/costos.js';
 import type { CartaDesarrollo } from '../reglas/mazo.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { desglosePuntos, puntosDe } from './puntos.js';
-import type { DesglosePuntos, Estado, Fase, JugadorId } from './tipos.js';
+import type { DesglosePuntos, Estado, Fase, JugadorId, Trato } from './tipos.js';
 
 /** Como `DesglosePuntos`, pero las cartas de punto de victoria ajenas llegan como `null`. */
 export type DesglosePuntosVista = Omit<DesglosePuntos, 'cartasPuntoVictoria'> & {
@@ -52,8 +52,9 @@ export interface Vista {
   readonly tratos: Estado['tratos'];
   readonly edificios: Estado['edificios'];
   readonly caminos: Estado['caminos'];
-  readonly banco: Estado['banco'];
-  readonly tamanoMazo: number;
+  /** `null` con la regla «ocultar banco»: no se manda, no solo se esconde en pantalla. */
+  readonly banco: Estado['banco'] | null;
+  readonly tamanoMazo: number | null;
   readonly granEjercito: JugadorId | null;
   readonly granRuta: JugadorId | null;
   readonly longitudGranRuta: number;
@@ -61,6 +62,8 @@ export interface Vista {
   readonly dados: Estado['dados'];
   readonly descartesPendientes: Estado['descartesPendientes'];
   readonly ganador: JugadorId | null;
+  /** El sorteo del orden de turno (público; vacío si el orden no se sorteó con dados). */
+  readonly sorteo: Estado['sorteo'];
   readonly version: number;
 }
 
@@ -68,6 +71,18 @@ export interface Vista {
  * Lo que puede ver `jugadorId` (o un espectador si es `null`). El servidor es autoritativo:
  * las manos ajenas nunca salen de aquí. Todo se copia; la vista no comparte referencias.
  */
+/** En el comercio privado una oferta solo la ven quien la hace y a quien va dirigida. */
+export function tratoVisiblePara(
+  modo: GameConfig['modoComercio'],
+  trato: Pick<Trato, 'proponente' | 'destinatario'>,
+  observador: JugadorId | null,
+): boolean {
+  if (modo !== 'PRIVADO') return true;
+  return (
+    observador !== null && (trato.proponente === observador || trato.destinatario === observador)
+  );
+}
+
 export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
   if (jugadorId !== null && !estado.jugadores.some((j) => j.id === jugadorId)) {
     throw new Error(`El jugador "${jugadorId}" no participa en la partida`);
@@ -84,7 +99,7 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
       caballerosJugados: j.caballerosJugados,
       puntos: puntosDe(estado, j.id, { incluirOcultos }),
       desglose: desgloseVisible(desglosePuntos(estado, j.id), incluirOcultos),
-      recursos: esYo ? { ...j.recursos } : null,
+      recursos: esYo || estado.config.manosVisibles ? { ...j.recursos } : null,
       cartasDesarrollo: esYo ? [...j.cartasDesarrollo, ...j.cartasCompradasEsteTurno] : null,
     };
   });
@@ -98,16 +113,18 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
       estado.turnoEspecialDe !== null
         ? (estado.jugadores[estado.turnoEspecialDe]?.id ?? null)
         : null,
-    tratos: estado.tratos.map((t) => ({
-      ...t,
-      entrega: { ...t.entrega },
-      pide: { ...t.pide },
-      rechazadoPor: [...t.rechazadoPor],
-    })),
+    tratos: estado.tratos
+      .filter((t) => tratoVisiblePara(estado.config.modoComercio, t, jugadorId))
+      .map((t) => ({
+        ...t,
+        entrega: { ...t.entrega },
+        pide: { ...t.pide },
+        rechazadoPor: [...t.rechazadoPor],
+      })),
     edificios: Object.fromEntries(Object.entries(estado.edificios).map(([v, e]) => [v, { ...e }])),
     caminos: { ...estado.caminos },
-    banco: { ...estado.banco },
-    tamanoMazo: estado.mazo.length,
+    banco: estado.config.ocultarBanco ? null : { ...estado.banco },
+    tamanoMazo: estado.config.ocultarBanco ? null : estado.mazo.length,
     granEjercito: estado.granEjercito,
     granRuta: estado.granRuta,
     longitudGranRuta: estado.longitudGranRuta,
@@ -115,6 +132,9 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
     dados: estado.dados && [estado.dados[0], estado.dados[1]],
     descartesPendientes: { ...estado.descartesPendientes },
     ganador: estado.ganador,
+    sorteo: estado.sorteo.map((ronda) =>
+      ronda.map((t) => ({ jugador: t.jugador, dados: [...t.dados] as [number, number] })),
+    ),
     version: estado.version,
   };
 }

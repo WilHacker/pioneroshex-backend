@@ -19,6 +19,8 @@ import { SalasService } from './salas.service.js';
 export const EVENTO_ACCION = 'juego:accion';
 export const EVENTO_INICIO = 'juego:inicio';
 export const EVENTO_NOTIFICACION = 'juego:notificacion';
+/** Quién está conectado y a quién juega el piloto automático; se envía en cada cambio. */
+export const EVENTO_PRESENCIA = 'juego:presencia';
 export const EVENTO_ERROR = 'juego:error';
 
 const ACCIONES_MAX_POR_VENTANA = 30;
@@ -75,9 +77,18 @@ export class JuegoGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     // `reloj` es lo que le queda al jugador que debe actuar (null si no hay límite). Va en milisegundos
     // restantes y no como hora, para que un reloj de cliente desajustado no importe.
-    const baja = actor.suscribir(jugadorId, (notificacion) =>
+    const bajaEscucha = actor.suscribir(jugadorId, (notificacion) =>
       socket.emit(EVENTO_NOTIFICACION, { ...notificacion, reloj: actor.restanteMs }),
     );
+    // Después de suscribirse: esta conexión ya sale en el inicio y no recibe su propia entrada.
+    const bajaPresencia = actor.alCambiarPresencia((presencia) =>
+      socket.emit(EVENTO_PRESENCIA, presencia),
+    );
+    // Primero la presencia: al irse no se le avisa a un socket que ya se cerró.
+    const baja = (): void => {
+      bajaPresencia();
+      bajaEscucha();
+    };
     this.sesiones.set(socket, {
       jugadorId,
       actor,
@@ -92,6 +103,7 @@ export class JuegoGateway implements OnGatewayConnection, OnGatewayDisconnect {
       acciones,
       sitios,
       reloj: actor.restanteMs,
+      presencia: actor.presencia(),
     });
   }
 

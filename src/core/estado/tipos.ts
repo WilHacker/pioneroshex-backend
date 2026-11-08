@@ -1,3 +1,4 @@
+import type { TiradaDeSorteo } from '../reglas/orden.js';
 import type { Hex } from '../mapa/coordenadas.js';
 import type { GameConfig } from '../partida/game-config.js';
 import type { Costo, LimitesDePiezas } from '../reglas/costos.js';
@@ -59,6 +60,12 @@ export interface Estado {
   readonly tiradas: number;
   readonly version: number;
   readonly ganador: JugadorId | null;
+  /** Quienes dejaron la partida a propósito: el servidor juega por ellos hasta el final. */
+  readonly abandonados: readonly JugadorId[];
+  /** El sorteo del orden de turno por dados (vacío si el orden no se sorteó). Es público. */
+  readonly sorteo: readonly (readonly TiradaDeSorteo[])[];
+  /** Ofertas que ha propuesto quien tiene el turno en este turno (para el tope por turno). */
+  readonly ofertasEsteTurno: number;
 }
 export type Accion =
   | { tipo: 'COLOCAR_POBLADO_INICIAL'; jugador: JugadorId; vertice: string }
@@ -99,7 +106,9 @@ export type Accion =
     }
   | { tipo: 'JUGAR_ABUNDANCIA'; jugador: JugadorId; recursos: readonly [Recurso, Recurso] }
   | { tipo: 'JUGAR_MONOPOLIO'; jugador: JugadorId; recurso: Recurso }
-  | { tipo: 'TERMINAR_TURNO'; jugador: JugadorId };
+  | { tipo: 'TERMINAR_TURNO'; jugador: JugadorId }
+  /** Dejar la partida. Vale en cualquier momento, también fuera de turno. */
+  | { tipo: 'ABANDONAR'; jugador: JugadorId };
 export type Origen = 'PREPARACION' | 'CONSTRUCCION';
 /** Quién provocó la acción: el jugador (VOLUNTARIA) o el reloj de inactividad (INACTIVIDAD). */
 export type CausaAccion = 'VOLUNTARIA' | 'INACTIVIDAD';
@@ -161,7 +170,13 @@ export type Evento =
       recibe: Recurso;
       cantidadRecibida: 1;
     }
-  | { tipo: 'PRODUCCION_BLOQUEADA'; recurso: Recurso; pedido: number; disponible: number }
+  | {
+      tipo: 'PRODUCCION_BLOQUEADA';
+      recurso: Recurso;
+      pedido: number;
+      /** Lo que quedaba en el banco; `null` para quien no puede verlo (regla «ocultar banco»). */
+      disponible: number | null;
+    }
   | { tipo: 'TRATO_PROPUESTO'; trato: Trato }
   | {
       tipo: 'TRATO_ACEPTADO';
@@ -237,7 +252,10 @@ export type Evento =
       puntos: number;
       /** Lo rellena `aplicar` con el estado final; `decidir` solo trae el total. */
       desglose?: DesglosePuntos;
-    };
+      /** Ganó porque todos los demás abandonaron, sin llegar a los puntos de victoria. */
+      porAbandono?: boolean;
+    }
+  | { tipo: 'JUGADOR_ABANDONO'; jugador: JugadorId };
 export type MotivoAccion =
   | 'PARTIDA_TERMINADA'
   | 'JUGADOR_DESCONOCIDO'
@@ -274,6 +292,7 @@ export type MotivoAccion =
   | 'TRATO_NO_DIRIGIDO_A_TI'
   | 'YA_RECHAZADO'
   | 'NO_PUEDES_COMERCIAR'
+  | 'DEMASIADAS_OFERTAS'
   | 'MAZO_AGOTADO'
   | 'NO_TIENES_ESA_CARTA'
   | 'CARTA_COMPRADA_ESTE_TURNO'
