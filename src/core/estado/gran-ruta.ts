@@ -111,17 +111,19 @@ export function evaluarGranRuta(
     return { titular: nuevoTitular, longitud: mejorLongitud };
   }
 
-  // Caso 2: No hay titular o el titular actual cayó por debajo de 5
-  let mejorJugador: JugadorId | null = null;
+  // Caso 2: No hay titular o el titular actual cayó por debajo de 5.
+  // Regla oficial: gana quien tenga el máximo (>= 5) sin empate; si el máximo está empatado, nadie.
   let mejorLongitud = 0;
+  let aspirantes: JugadorId[] = [];
 
   for (const j of estado.jugadores) {
     const l = longitudes[j.id]!;
-    if (l >= LONGITUD_MINIMA_GRAN_RUTA && l > mejorLongitud) {
-      mejorJugador = j.id;
-      mejorLongitud = l;
-    }
+    if (l < LONGITUD_MINIMA_GRAN_RUTA || l < mejorLongitud) continue;
+    if (l > mejorLongitud) aspirantes = [];
+    aspirantes.push(j.id);
+    mejorLongitud = l;
   }
 
-  return { titular: mejorJugador, longitud: mejorLongitud };
+  const unico = aspirantes.length === 1 ? aspirantes[0]! : null;
+  return { titular: unico, longitud: unico ? mejorLongitud : 0 };
 }

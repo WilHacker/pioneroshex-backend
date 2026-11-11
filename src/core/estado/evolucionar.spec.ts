@@ -177,12 +177,28 @@ describe('evolucionar', () => {
       entrega: { MADERA: 1, LADRILLO: 0, OVEJA: 0, TRIGO: 0, MINERAL: 0 },
       pide: { MADERA: 0, LADRILLO: 0, OVEJA: 1, TRIGO: 0, MINERAL: 0 },
       rechazadoPor: [],
+      aceptadoPor: [],
     };
 
     it('TRATO_PROPUESTO agrega el trato a la lista', () => {
       const nuevo = evolucionarSinMutar(base, { tipo: 'TRATO_PROPUESTO', trato });
       expect(nuevo.tratos).toHaveLength(1);
       expect(nuevo.tratos[0]?.id).toBe('trato-xyz');
+    });
+
+    it('TRATO_PREACEPTADO anota quién aceptó y deja el trato abierto, sin mover cartas', () => {
+      const conTrato = conCambios(base, { tratos: [trato] });
+      const uno = evolucionarSinMutar(conTrato, {
+        tipo: 'TRATO_PREACEPTADO',
+        tratoId: 'trato-xyz',
+        jugador: j1,
+        proponente: j0,
+      });
+      expect(uno.tratos).toHaveLength(1);
+      expect(uno.tratos[0]?.aceptadoPor).toEqual([j1]);
+      expect(uno.jugadores).toEqual(conTrato.jugadores);
+      // El trato original no se muta: el estado es inmutable.
+      expect(conTrato.tratos[0]?.aceptadoPor).toEqual([]);
     });
 
     it('TRATO_ACEPTADO intercambia cartas y elimina el trato', () => {

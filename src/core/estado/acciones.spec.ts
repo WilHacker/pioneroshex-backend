@@ -23,6 +23,7 @@ const TIPOS: readonly Accion['tipo'][] = [
   'CAMBIAR_CON_BANCA',
   'PROPONER_TRATO',
   'ACEPTAR_TRATO',
+  'CONFIRMAR_TRATO',
   'RECHAZAR_TRATO',
   'CANCELAR_TRATO',
   'CONTRAOFERTAR_TRATO',
@@ -60,13 +61,16 @@ function todasLasCandidatas(mesa: Mesa, jugador: JugadorId): Accion[] {
     ...aristas.map((arista): Accion => ({ tipo: 'CONSTRUIR_CAMINO', jugador, arista })),
     ...vertices.map((vertice): Accion => ({ tipo: 'CONSTRUIR_POBLADO', jugador, vertice })),
     ...vertices.map((vertice): Accion => ({ tipo: 'CONSTRUIR_CIUDAD', jugador, vertice })),
+    // Un cambio simple a cada razón posible (2, 3 y 4): `decidir` solo acepta la que le toca al jugador.
     ...RECURSOS.flatMap((entrega) =>
-      RECURSOS.filter((recibe) => recibe !== entrega).map((recibe): Accion => ({
-        tipo: 'CAMBIAR_CON_BANCA',
-        jugador,
-        entrega,
-        recibe,
-      })),
+      RECURSOS.filter((recibe) => recibe !== entrega).flatMap((recibe) =>
+        [2, 3, 4].map((razon): Accion => ({
+          tipo: 'CAMBIAR_CON_BANCA',
+          jugador,
+          entrega: { [entrega]: razon },
+          recibe: { [recibe]: 1 },
+        })),
+      ),
     ),
     ...RECURSOS.flatMap((entrega) =>
       RECURSOS.filter((pide) => pide !== entrega).map((pide): Accion => ({
@@ -77,6 +81,7 @@ function todasLasCandidatas(mesa: Mesa, jugador: JugadorId): Accion[] {
       })),
     ),
     { tipo: 'ACEPTAR_TRATO', jugador, tratoId: 't1' },
+    { tipo: 'CONFIRMAR_TRATO', jugador, tratoId: 't1', con: 'j1' },
     { tipo: 'RECHAZAR_TRATO', jugador, tratoId: 't1' },
     { tipo: 'CANCELAR_TRATO', jugador, tratoId: 't1' },
     {
@@ -246,6 +251,66 @@ function conJ0(
 const entrada = (estado: Estado, tipo: Accion['tipo'], jugador = j0) =>
   accionesDisponibles(mesa, estado, jugador).find((d) => d.tipo === tipo);
 
+describe('construcción de carreteras antes de tirar los dados', () => {
+  // El motor deja jugar una carta de desarrollo antes de tirar: la enumeración (que usan la ayuda del
+  // cliente y el piloto) debe ofrecerla también en esa fase. Antes solo la ofrecía en FASE_PRINCIPAL.
+  const conLaCarta = (fase: Fase): Estado =>
+    conCambios(principal, {
+      fase,
+      jugadores: principal.jugadores.map((j) =>
+        j.id === j0 ? { ...j, cartasDesarrollo: ['CONSTRUCCION_CARRETERAS' as const] } : j,
+      ),
+    });
+
+  it.each(['PRE_TIRADA', 'FASE_PRINCIPAL'] as const)(
+    'en %s se enumeran los caminos que se pueden poner y el motor los acepta',
+    (fase) => {
+      const estado = conLaCarta(fase);
+      const ofrecidas = enumerarAcciones(mesa, estado, j0).filter(
+        (a) => a.tipo === 'JUGAR_CONSTRUCCION_CARRETERAS',
+      );
+      expect(ofrecidas.length).toBeGreaterThan(0);
+      for (const accion of ofrecidas) expect(aplicar(mesa, estado, accion).ok).toBe(true);
+      expect(entrada(estado, 'JUGAR_CONSTRUCCION_CARRETERAS')).toEqual({
+        tipo: 'JUGAR_CONSTRUCCION_CARRETERAS',
+        disponible: true,
+      });
+    },
+  );
+
+  it('todo camino que el motor acepta con esa carta está enumerado (ni uno de más ni de menos)', () => {
+    const estado = conLaCarta('PRE_TIRADA');
+    const enumeradas = new Set(
+      enumerarAcciones(mesa, estado, j0)
+        .filter((a) => a.tipo === 'JUGAR_CONSTRUCCION_CARRETERAS')
+        .map(claveDe),
+    );
+    const aceptadas = mesa.mapa.aristas
+      .map((a): Accion => ({
+        tipo: 'JUGAR_CONSTRUCCION_CARRETERAS',
+        jugador: j0,
+        aristas: [a.id],
+      }))
+      .filter((a) => aplicar(mesa, estado, a).ok);
+    expect(new Set(aceptadas.map(claveDe))).toEqual(
+      new Set(
+        [...enumeradas].filter(
+          (c) => (JSON.parse(c) as { aristas: string[] }).aristas.length === 1,
+        ),
+      ),
+    );
+  });
+
+  it('sin la carta, o con otra fase, no se ofrece', () => {
+    expect(
+      entrada(conLaCarta('FASE_PRINCIPAL'), 'JUGAR_CONSTRUCCION_CARRETERAS', j1)?.disponible,
+    ).toBe(false);
+    expect(entrada(conLaCarta('DESCARTE'), 'JUGAR_CONSTRUCCION_CARRETERAS')?.disponible).toBe(
+      false,
+    );
+  });
+});
+
 describe('accionesDisponibles: ayuda por tipo', () => {
   it('sin recursos: CONSTRUIR_CIUDAD con RECURSOS_INSUFICIENTES y la falta exacta', () => {
     const sinNada = conJ0(principal, VACIO);
@@ -315,6 +380,7 @@ describe('accionesDisponibles: ayuda por tipo', () => {
       CAMBIAR_CON_BANCA: 'RECURSOS_INSUFICIENTES',
       PROPONER_TRATO: 'RECURSOS_INSUFICIENTES',
       ACEPTAR_TRATO: 'TRATO_INEXISTENTE',
+      CONFIRMAR_TRATO: 'TRATO_INEXISTENTE',
       RECHAZAR_TRATO: 'TRATO_INEXISTENTE',
       CANCELAR_TRATO: 'TRATO_INEXISTENTE',
       CONTRAOFERTAR_TRATO: 'TRATO_INEXISTENTE',

@@ -1,6 +1,6 @@
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { faltaPara } from './falta.js';
-import type { Accion, Decision, Estado, Rechazo, Trato } from './tipos.js';
+import type { Accion, Decision, Estado, Evento, JugadorId, Rechazo, Trato } from './tipos.js';
 
 /** RECURSOS_INSUFICIENTES con lo que falta y de quién es la mano que no alcanza. */
 function sinRecursos(
@@ -11,6 +11,52 @@ function sinRecursos(
   return falta
     ? { ok: false, motivo: 'RECURSOS_INSUFICIENTES', falta, detalle: { dueno: jugador.id } }
     : null;
+}
+
+/** Quienes ya dijeron que sí. Un trato guardado antes de que existiera este campo no lo trae. */
+const aceptadosDe = (trato: Trato): readonly JugadorId[] => trato.aceptadoPor ?? [];
+
+/** A quién va el trato: al destinatario, o a todos los demás si está abierto. */
+function destinatariosDe(estado: Estado, trato: Trato): readonly JugadorId[] {
+  return trato.destinatario !== null
+    ? [trato.destinatario]
+    : estado.jugadores.map((j) => j.id).filter((id) => id !== trato.proponente);
+}
+
+/**
+ * Con quién se cierra solo el trato: si ya respondieron todos a quienes iba y aceptó exactamente
+ * uno, con ese. Si faltan respuestas, si nadie aceptó o si aceptaron varios, con nadie: en el último
+ * caso elige el proponente.
+ */
+function unicoAceptante(
+  estado: Estado,
+  trato: Trato,
+  aceptan: readonly JugadorId[],
+  rechazan: readonly JugadorId[],
+): JugadorId | null {
+  const respondieron = new Set([...aceptan, ...rechazan]);
+  const todosRespondieron = destinatariosDe(estado, trato).every((id) => respondieron.has(id));
+  return todosRespondieron && aceptan.length === 1 ? aceptan[0]! : null;
+}
+
+/** El evento que ejecuta el intercambio entre el proponente y quien aceptó. */
+function cierreDe(trato: Trato, aceptante: JugadorId): Evento {
+  return {
+    tipo: 'TRATO_ACEPTADO',
+    tratoId: trato.id,
+    proponente: trato.proponente,
+    aceptante,
+    entrega: trato.entrega,
+    pide: trato.pide,
+  };
+}
+
+/** ¿Les alcanza a los dos, justo ahora, para cerrar el trato? (Las manos pueden haber cambiado.) */
+function alcanzaParaCerrar(estado: Estado, trato: Trato, aceptante: JugadorId): Rechazo | null {
+  const a = estado.jugadores.find((j) => j.id === aceptante);
+  const p = estado.jugadores.find((j) => j.id === trato.proponente);
+  if (!a || !p) return { ok: false, motivo: 'JUGADOR_DESCONOCIDO' };
+  return sinRecursos(a, trato.pide) ?? sinRecursos(p, trato.entrega);
 }
 
 function normalizar(parcial: Partial<Record<Recurso, number>>): Record<Recurso, number> {
@@ -104,6 +150,7 @@ export function decidirProponerTrato(estado: Estado, accion: Accion): Decision {
     entrega,
     pide,
     rechazadoPor: [],
+    aceptadoPor: [],
   };
 
   return {
@@ -133,6 +180,13 @@ export function decidirAceptarTrato(estado: Estado, accion: Accion): Decision {
     return { ok: false, motivo: 'TRATO_NO_DIRIGIDO_A_TI' };
   }
 
+  if (trato.rechazadoPor.includes(accion.jugador)) {
+    return { ok: false, motivo: 'YA_RECHAZADO' };
+  }
+  if (aceptadosDe(trato).includes(accion.jugador)) {
+    return { ok: false, motivo: 'YA_ACEPTADO' };
+  }
+
   const aceptante = estado.jugadores.find((j) => j.id === accion.jugador);
   const proponente = estado.jugadores.find((j) => j.id === trato.proponente);
   if (!aceptante || !proponente) {
@@ -145,19 +199,49 @@ export function decidirAceptarTrato(estado: Estado, accion: Accion): Decision {
   const faltaProponente = sinRecursos(proponente, trato.entrega);
   if (faltaProponente) return faltaProponente;
 
+  // Si ya respondieron todos y este es el único que acepta, el trato se cierra con él; si no, queda
+  // registrado y el proponente decide (o esperan los que faltan por responder).
+  const aceptan = [...aceptadosDe(trato), accion.jugador];
+  if (unicoAceptante(estado, trato, aceptan, trato.rechazadoPor) === accion.jugador) {
+    return { ok: true, eventos: [cierreDe(trato, accion.jugador)] };
+  }
   return {
     ok: true,
     eventos: [
       {
-        tipo: 'TRATO_ACEPTADO',
+        tipo: 'TRATO_PREACEPTADO',
         tratoId: trato.id,
+        jugador: accion.jugador,
         proponente: trato.proponente,
-        aceptante: accion.jugador,
-        entrega: trato.entrega,
-        pide: trato.pide,
       },
     ],
   };
+}
+
+/** El proponente elige, entre quienes aceptaron su oferta, con quién cierra el trato. */
+export function decidirConfirmarTrato(estado: Estado, accion: Accion): Decision {
+  if (accion.tipo !== 'CONFIRMAR_TRATO') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+  if (estado.fase !== 'FASE_PRINCIPAL') {
+    return { ok: false, motivo: 'FASE_INCORRECTA' };
+  }
+
+  const trato = estado.tratos.find((t) => t.id === accion.tratoId);
+  if (!trato) {
+    return { ok: false, motivo: 'TRATO_INEXISTENTE' };
+  }
+  if (accion.jugador !== trato.proponente) {
+    return { ok: false, motivo: 'NO_ES_TU_TRATO' };
+  }
+  if (!aceptadosDe(trato).includes(accion.con)) {
+    return { ok: false, motivo: 'DESTINATARIO_INVALIDO' };
+  }
+
+  const noAlcanza = alcanzaParaCerrar(estado, trato, accion.con);
+  if (noAlcanza) return noAlcanza;
+
+  return { ok: true, eventos: [cierreDe(trato, accion.con)] };
 }
 
 export function decidirRechazarTrato(estado: Estado, accion: Accion): Decision {
@@ -184,17 +268,20 @@ export function decidirRechazarTrato(estado: Estado, accion: Accion): Decision {
   if (trato.rechazadoPor.includes(accion.jugador)) {
     return { ok: false, motivo: 'YA_RECHAZADO' };
   }
+  if (aceptadosDe(trato).includes(accion.jugador)) {
+    return { ok: false, motivo: 'YA_ACEPTADO' };
+  }
 
-  return {
-    ok: true,
-    eventos: [
-      {
-        tipo: 'TRATO_RECHAZADO',
-        tratoId: trato.id,
-        jugador: accion.jugador,
-      },
-    ],
-  };
+  const rechazo: Evento = { tipo: 'TRATO_RECHAZADO', tratoId: trato.id, jugador: accion.jugador };
+
+  // Si con este rechazo ya respondieron todos y solo uno aceptó, el trato se cierra con él (siempre
+  // que a los dos todavía les alcance: las manos pueden haber cambiado mientras tanto).
+  const rechazan = [...trato.rechazadoPor, accion.jugador];
+  const unico = unicoAceptante(estado, trato, aceptadosDe(trato), rechazan);
+  if (unico !== null && alcanzaParaCerrar(estado, trato, unico) === null) {
+    return { ok: true, eventos: [rechazo, cierreDe(trato, unico)] };
+  }
+  return { ok: true, eventos: [rechazo] };
 }
 
 export function decidirCancelarTrato(estado: Estado, accion: Accion): Decision {
@@ -275,6 +362,7 @@ export function decidirContraofertarTrato(estado: Estado, accion: Accion): Decis
     entrega,
     pide,
     rechazadoPor: [],
+    aceptadoPor: [],
     contraofertaDe: tratoOriginal.id,
   };
 

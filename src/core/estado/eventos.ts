@@ -37,6 +37,11 @@ function participaEnElTrato(
       observador !== null && (observador === evento.proponente || observador === evento.aceptante)
     );
   }
+  if (evento.tipo === 'TRATO_PREACEPTADO') {
+    return (
+      observador !== null && (observador === evento.proponente || observador === evento.jugador)
+    );
+  }
   if (evento.tipo === 'TRATO_RECHAZADO' || evento.tipo === 'TRATO_CANCELADO') {
     const trato = tratos.find((t) => t.id === evento.tratoId);
     return trato !== undefined && tratoVisiblePara('PRIVADO', trato, observador);
@@ -46,6 +51,7 @@ function participaEnElTrato(
 
 const ES_DE_TRATO: ReadonlySet<Evento['tipo']> = new Set([
   'TRATO_PROPUESTO',
+  'TRATO_PREACEPTADO',
   'TRATO_ACEPTADO',
   'TRATO_RECHAZADO',
   'TRATO_CANCELADO',

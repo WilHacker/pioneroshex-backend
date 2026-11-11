@@ -114,5 +114,26 @@ describe('gran-ruta', () => {
       expect(resSupera.titular).toBe(j1);
       expect(resSupera.longitud).toBe(6);
     });
+
+    it('si el titular cae por un corte y dos rivales empatan en el máximo, nadie la tiene', () => {
+      const estadoConTitular: Estado = conCambios(base, { granRuta: j0, longitudGranRuta: 5 });
+      const j2 = base.jugadores[2]!.id;
+      const res = evaluarGranRuta(mesa, estadoConTitular, { [j0]: 4, [j1]: 6, [j2]: 6 });
+      expect(res.titular).toBeNull();
+    });
+
+    it('si el titular cae por un corte y un rival tiene el máximo único (>= 5), la recibe', () => {
+      const estadoConTitular: Estado = conCambios(base, { granRuta: j0, longitudGranRuta: 5 });
+      const j2 = base.jugadores[2]!.id;
+      const res = evaluarGranRuta(mesa, estadoConTitular, { [j0]: 4, [j1]: 6, [j2]: 5 });
+      expect(res.titular).toBe(j1);
+      expect(res.longitud).toBe(6);
+    });
+
+    it('si el titular cae y el empate en el máximo es con otro por debajo de 5, queda vacante', () => {
+      const estadoConTitular: Estado = conCambios(base, { granRuta: j0, longitudGranRuta: 5 });
+      const res = evaluarGranRuta(mesa, estadoConTitular, { [j0]: 4, [j1]: 4 });
+      expect(res.titular).toBeNull();
+    });
   });
 });

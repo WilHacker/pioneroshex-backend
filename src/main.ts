@@ -17,8 +17,8 @@ async function arrancar(): Promise<void> {
   app.enableShutdownHooks();
 
   const puerto = config.get('PORT', { infer: true });
-  await app.listen(puerto);
-  new Logger('Arranque').log(`Servidor escuchando en el puerto ${puerto}`);
+  await app.listen(puerto, '0.0.0.0');
+  new Logger('Arranque').log(`Servidor escuchando en el puerto ${puerto} (0.0.0.0)`);
 }
 
 arrancar().catch((error: unknown) => {

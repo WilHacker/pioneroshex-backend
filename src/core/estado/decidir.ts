@@ -1,6 +1,7 @@
 import { decidirCambioConBanca } from './comercio.js';
 import {
   decidirAceptarTrato,
+  decidirConfirmarTrato,
   decidirCancelarTrato,
   decidirContraofertarTrato,
   decidirProponerTrato,
@@ -39,6 +40,7 @@ export const manejadores: Readonly<Record<Accion['tipo'], Manejador>> = {
   CAMBIAR_CON_BANCA: decidirCambioConBanca,
   PROPONER_TRATO: (_mesa, estado, accion) => decidirProponerTrato(estado, accion),
   ACEPTAR_TRATO: (_mesa, estado, accion) => decidirAceptarTrato(estado, accion),
+  CONFIRMAR_TRATO: (_mesa, estado, accion) => decidirConfirmarTrato(estado, accion),
   RECHAZAR_TRATO: (_mesa, estado, accion) => decidirRechazarTrato(estado, accion),
   CANCELAR_TRATO: (_mesa, estado, accion) => decidirCancelarTrato(estado, accion),
   CONTRAOFERTAR_TRATO: (_mesa, estado, accion) => decidirContraofertarTrato(estado, accion),

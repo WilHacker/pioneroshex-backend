@@ -27,6 +27,11 @@ export interface Trato {
   readonly entrega: Readonly<Record<Recurso, number>>;
   readonly pide: Readonly<Record<Recurso, number>>;
   readonly rechazadoPor: readonly JugadorId[];
+  /**
+   * Quienes dijeron que sí y esperan a que el proponente los confirme. Si ya respondieron todos y
+   * acepta uno solo, el trato se cierra con él sin más; si aceptan varios, elige el proponente.
+   */
+  readonly aceptadoPor: readonly JugadorId[];
   readonly contraofertaDe?: string;
 }
 export interface Jugador {
@@ -78,7 +83,16 @@ export type Accion =
   | { tipo: 'CONSTRUIR_CAMINO'; jugador: JugadorId; arista: string }
   | { tipo: 'CONSTRUIR_POBLADO'; jugador: JugadorId; vertice: string }
   | { tipo: 'CONSTRUIR_CIUDAD'; jugador: JugadorId; vertice: string }
-  | { tipo: 'CAMBIAR_CON_BANCA'; jugador: JugadorId; entrega: Recurso; recibe: Recurso }
+  /**
+   * Cambio con la banca de una o varias razones a la vez: cada recurso que se entrega debe ser un
+   * múltiplo de su razón (4, 3 o 2) y se piden tantas cartas como cambios completos hay.
+   */
+  | {
+      tipo: 'CAMBIAR_CON_BANCA';
+      jugador: JugadorId;
+      entrega: Partial<Record<Recurso, number>>;
+      recibe: Partial<Record<Recurso, number>>;
+    }
   | {
       tipo: 'PROPONER_TRATO';
       jugador: JugadorId;
@@ -87,6 +101,8 @@ export type Accion =
       destinatario?: JugadorId | null;
     }
   | { tipo: 'ACEPTAR_TRATO'; jugador: JugadorId; tratoId: string }
+  /** El proponente elige, entre quienes aceptaron su oferta, con quién cierra el trato. */
+  | { tipo: 'CONFIRMAR_TRATO'; jugador: JugadorId; tratoId: string; con: JugadorId }
   | { tipo: 'RECHAZAR_TRATO'; jugador: JugadorId; tratoId: string }
   | { tipo: 'CANCELAR_TRATO'; jugador: JugadorId; tratoId: string }
   | {
@@ -186,6 +202,8 @@ export type Evento =
       entrega: Readonly<Record<Recurso, number>>;
       pide: Readonly<Record<Recurso, number>>;
     }
+  /** Alguien dijo que sí a una oferta abierta: queda a la espera de que el proponente la cierre. */
+  | { tipo: 'TRATO_PREACEPTADO'; tratoId: string; jugador: JugadorId; proponente: JugadorId }
   | { tipo: 'TRATO_RECHAZADO'; tratoId: string; jugador: JugadorId }
   | {
       tipo: 'TRATO_CANCELADO';
@@ -273,6 +291,8 @@ export type MotivoAccion =
   | 'BANCO_AGOTADO'
   | 'MISMO_RECURSO'
   | 'RECURSO_INVALIDO'
+  /** Un cambio con la banca que no cuadra: no es múltiplo de la razón o las cartas pedidas no son las de los cambios. */
+  | 'CAMBIO_INCORRECTO'
   | 'VERTICE_INEXISTENTE'
   | 'ARISTA_INEXISTENTE'
   | 'VERTICE_OCUPADO'
@@ -291,6 +311,7 @@ export type MotivoAccion =
   | 'INTERCAMBIO_SOLAPADO'
   | 'TRATO_NO_DIRIGIDO_A_TI'
   | 'YA_RECHAZADO'
+  | 'YA_ACEPTADO'
   | 'NO_PUEDES_COMERCIAR'
   | 'DEMASIADAS_OFERTAS'
   | 'MAZO_AGOTADO'
@@ -312,7 +333,11 @@ export interface DetalleRechazo {
   readonly recurso?: Recurso;
   readonly pedido?: number;
   readonly disponible?: number;
-  /** Cartas que había que descartar y cuántas se entregaron (CANTIDAD_DESCARTE_INCORRECTA). */
+  /**
+   * Cartas que había que descartar y cuántas se entregaron (CANTIDAD_DESCARTE_INCORRECTA). En
+   * CAMBIO_INCORRECTO: los cambios completos que se hacían (`requerido`) y las cartas pedidas
+   * (`pedidas`), o, si un recurso no es múltiplo de su razón, esa razón y lo que se entregó.
+   */
   readonly requerido?: number;
   readonly entregado?: number;
   /** Rivales con edificio junto a la casilla y cartas en mano: a quién se puede robar. */

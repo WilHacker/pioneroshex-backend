@@ -30,7 +30,7 @@ export const esquemaAccionEntrante = z.discriminatedUnion('tipo', [
   z.strictObject({ tipo: z.literal('CONSTRUIR_CAMINO'), arista: id }),
   z.strictObject({ tipo: z.literal('CONSTRUIR_POBLADO'), vertice: id }),
   z.strictObject({ tipo: z.literal('CONSTRUIR_CIUDAD'), vertice: id }),
-  z.strictObject({ tipo: z.literal('CAMBIAR_CON_BANCA'), entrega: recurso, recibe: recurso }),
+  z.strictObject({ tipo: z.literal('CAMBIAR_CON_BANCA'), entrega: cantidades, recibe: cantidades }),
   z.strictObject({
     tipo: z.literal('PROPONER_TRATO'),
     entrega: cantidades,
@@ -38,6 +38,7 @@ export const esquemaAccionEntrante = z.discriminatedUnion('tipo', [
     destinatario: id.nullable().optional(),
   }),
   z.strictObject({ tipo: z.literal('ACEPTAR_TRATO'), tratoId: id }),
+  z.strictObject({ tipo: z.literal('CONFIRMAR_TRATO'), tratoId: id, con: id }),
   z.strictObject({ tipo: z.literal('RECHAZAR_TRATO'), tratoId: id }),
   z.strictObject({ tipo: z.literal('CANCELAR_TRATO'), tratoId: id }),
   z.strictObject({

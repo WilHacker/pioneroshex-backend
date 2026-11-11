@@ -1,5 +1,6 @@
 import { clave } from '../mapa/coordenadas.js';
 import type { Costo } from '../reglas/costos.js';
+import { mejorRazon } from '../reglas/puertos.js';
 import { RECURSOS, type Recurso } from '../reglas/recursos.js';
 import { puedeColocarCamino } from './conectividad.js';
 import { decidir } from './decidir.js';
@@ -25,15 +26,19 @@ const porArista =
   (mesa, jugador) =>
     mesa.mapa.aristas.map((a) => ({ tipo, jugador, arista: a.id }));
 
-const cambiosConBanca: Candidatas = (_mesa, jugador) =>
-  RECURSOS.flatMap((entrega) =>
+/** Los cambios simples (una razón por una carta): bastan para saber si se puede cambiar algo y a los bots. */
+const cambiosConBanca: Candidatas = (mesa, jugador, estado) => {
+  const edificios = estado?.edificios ?? {};
+  const propios = new Set(Object.keys(edificios).filter((v) => edificios[v]?.dueno === jugador));
+  return RECURSOS.flatMap((entrega) =>
     RECURSOS.filter((recibe) => recibe !== entrega).map((recibe) => ({
       tipo: 'CAMBIAR_CON_BANCA' as const,
       jugador,
-      entrega,
-      recibe,
+      entrega: { [entrega]: mejorRazon(mesa.puertos, propios, entrega) },
+      recibe: { [recibe]: 1 },
     })),
   );
+};
 
 const moverLadron: Candidatas = (mesa, jugador, estado) => {
   if (!estado) {
@@ -126,7 +131,8 @@ const jugarConstruccionCarreteras: Candidatas = (mesa, jugador, estado) => {
     !j ||
     !j.cartasDesarrollo.includes('CONSTRUCCION_CARRETERAS') ||
     estado.cartaJugadaEsteTurno ||
-    estado.fase !== 'FASE_PRINCIPAL' ||
+    // Igual que el motor: una carta de desarrollo se puede jugar antes de tirar y en la fase principal.
+    (estado.fase !== 'FASE_PRINCIPAL' && estado.fase !== 'PRE_TIRADA') ||
     j.piezasRestantes.caminos === 0
   ) {
     return [
@@ -198,6 +204,20 @@ const CANDIDATAS: Record<Accion['tipo'], Candidatas> = {
     estado?.tratos.length
       ? estado.tratos.map((t) => ({ tipo: 'ACEPTAR_TRATO' as const, jugador, tratoId: t.id }))
       : [{ tipo: 'ACEPTAR_TRATO' as const, jugador, tratoId: '' }],
+  CONFIRMAR_TRATO: (_mesa, jugador, estado) => {
+    const propios = (estado?.tratos ?? []).filter((t) => t.proponente === jugador);
+    const candidatas = propios.flatMap((t) =>
+      (t.aceptadoPor ?? []).map((con) => ({
+        tipo: 'CONFIRMAR_TRATO' as const,
+        jugador,
+        tratoId: t.id,
+        con,
+      })),
+    );
+    return candidatas.length > 0
+      ? candidatas
+      : [{ tipo: 'CONFIRMAR_TRATO' as const, jugador, tratoId: '', con: '' }];
+  },
   RECHAZAR_TRATO: (_mesa, jugador, estado) =>
     estado?.tratos.length
       ? estado.tratos.map((t) => ({ tipo: 'RECHAZAR_TRATO' as const, jugador, tratoId: t.id }))
@@ -260,6 +280,7 @@ const ALCANCE: Readonly<Record<MotivoAccion, 'general' | 'lugar'>> = {
   BANCO_AGOTADO: 'general',
   MISMO_RECURSO: 'general',
   RECURSO_INVALIDO: 'general',
+  CAMBIO_INCORRECTO: 'general',
   DESTINO_INVALIDO: 'lugar',
   MISMO_DESTINO: 'lugar',
   VICTIMA_INVALIDA: 'lugar',
@@ -283,6 +304,7 @@ const ALCANCE: Readonly<Record<MotivoAccion, 'general' | 'lugar'>> = {
   INTERCAMBIO_SOLAPADO: 'general',
   TRATO_NO_DIRIGIDO_A_TI: 'general',
   YA_RECHAZADO: 'general',
+  YA_ACEPTADO: 'general',
   NO_PUEDES_COMERCIAR: 'general',
   DEMASIADAS_OFERTAS: 'general',
   MAZO_AGOTADO: 'general',

@@ -21,9 +21,10 @@ const accionesDe = (jugador: string): Accion[] => [
   { tipo: 'CONSTRUIR_CAMINO', jugador, arista },
   { tipo: 'CONSTRUIR_POBLADO', jugador, vertice },
   { tipo: 'CONSTRUIR_CIUDAD', jugador, vertice },
-  { tipo: 'CAMBIAR_CON_BANCA', jugador, entrega: 'MADERA', recibe: 'TRIGO' },
+  { tipo: 'CAMBIAR_CON_BANCA', jugador, entrega: { MADERA: 4 }, recibe: { TRIGO: 1 } },
   { tipo: 'PROPONER_TRATO', jugador, entrega: { MADERA: 1 }, pide: { TRIGO: 1 } },
   { tipo: 'ACEPTAR_TRATO', jugador, tratoId: 't1' },
+  { tipo: 'CONFIRMAR_TRATO', jugador, tratoId: 't1', con: 'j1' },
   { tipo: 'RECHAZAR_TRATO', jugador, tratoId: 't1' },
   { tipo: 'CANCELAR_TRATO', jugador, tratoId: 't1' },
   {
@@ -64,7 +65,7 @@ describe('decidir: comprobaciones generales', () => {
 
   it('todos los tipos de acción tienen manejador', () => {
     const tipos = accionesDe(j0).map((a) => a.tipo);
-    expect(tipos).toHaveLength(23);
+    expect(tipos).toHaveLength(24);
     // ABANDONAR tiene manejador pero no sale en la ayuda: no es una jugada que se ofrezca.
     expect(Object.keys(manejadores).toSorted()).toEqual([...tipos, 'ABANDONAR'].toSorted());
     for (const tipo of [...tipos, 'ABANDONAR' as const]) {

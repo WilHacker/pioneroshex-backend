@@ -17,10 +17,16 @@ describe('esquemaAccionEntrante', () => {
     { tipo: 'DESCARTAR_RECURSOS', recursos: { MADERA: 2, TRIGO: 1 } },
     { tipo: 'MOVER_LADRON', destino: hex, victima: null },
     { tipo: 'MOVER_LADRON', destino: hex, victima: 'j2' },
-    { tipo: 'CAMBIAR_CON_BANCA', entrega: 'MADERA', recibe: 'MINERAL' },
+    { tipo: 'CAMBIAR_CON_BANCA', entrega: { MADERA: 4 }, recibe: { MINERAL: 1 } },
+    {
+      tipo: 'CAMBIAR_CON_BANCA',
+      entrega: { MADERA: 8, TRIGO: 4 },
+      recibe: { OVEJA: 2, LADRILLO: 1 },
+    },
     { tipo: 'PROPONER_TRATO', entrega: { MADERA: 1 }, pide: { OVEJA: 1 } },
     { tipo: 'PROPONER_TRATO', entrega: { MADERA: 1 }, pide: { OVEJA: 1 }, destinatario: 'j2' },
     { tipo: 'ACEPTAR_TRATO', tratoId: 't1' },
+    { tipo: 'CONFIRMAR_TRATO', tratoId: 't1', con: 'j2' },
     { tipo: 'RECHAZAR_TRATO', tratoId: 't1' },
     { tipo: 'CANCELAR_TRATO', tratoId: 't1' },
     {
@@ -62,7 +68,21 @@ describe('esquemaAccionEntrante', () => {
     ['tres carreteras', { tipo: 'JUGAR_CONSTRUCCION_CARRETERAS', aristas: ['a', 'b', 'c'] }],
     ['cero carreteras', { tipo: 'JUGAR_CONSTRUCCION_CARRETERAS', aristas: [] }],
     ['abundancia con un solo recurso', { tipo: 'JUGAR_ABUNDANCIA', recursos: ['MADERA'] }],
-    ['cambio con la banca sin recibe', { tipo: 'CAMBIAR_CON_BANCA', entrega: 'MADERA' }],
+    ['confirmar un trato sin decir con quién', { tipo: 'CONFIRMAR_TRATO', tratoId: 't1' }],
+    ['confirmar un trato sin el trato', { tipo: 'CONFIRMAR_TRATO', con: 'j2' }],
+    ['cambio con la banca sin recibe', { tipo: 'CAMBIAR_CON_BANCA', entrega: { MADERA: 4 } }],
+    [
+      'cambio con la banca con un solo recurso suelto (la forma antigua)',
+      { tipo: 'CAMBIAR_CON_BANCA', entrega: 'MADERA', recibe: 'TRIGO' },
+    ],
+    [
+      'cambio con la banca con un recurso que no existe',
+      { tipo: 'CAMBIAR_CON_BANCA', entrega: { ORO: 4 }, recibe: { TRIGO: 1 } },
+    ],
+    [
+      'cambio con la banca con una cantidad absurda',
+      { tipo: 'CAMBIAR_CON_BANCA', entrega: { MADERA: 100000 }, recibe: { TRIGO: 1 } },
+    ],
   ])('rechaza: %s', (_nombre, entrada) => {
     expect(esquemaAccionEntrante.safeParse(entrada).success).toBe(false);
   });

@@ -2,17 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   decidirAceptarTrato,
   decidirCancelarTrato,
+  decidirConfirmarTrato,
   decidirContraofertarTrato,
   decidirProponerTrato,
   decidirRechazarTrato,
 } from './comercio-jugadores.js';
+import { aplicar } from './aplicar.js';
 import { crearPartida } from './crear.js';
 import { conCambios, mesaDePrueba } from './pruebas.js';
 import type { Estado, Trato } from './tipos.js';
 
 const mesa = mesaDePrueba();
 const base = crearPartida(mesa, ['alice', 'bob', 'carol', 'dave']);
-const [j0, j1, j2] = base.jugadores.map((j) => j.id) as [string, string, string];
+const [j0, j1, j2, j3] = base.jugadores.map((j) => j.id) as [string, string, string, string];
 
 function estadoEnPrincipal(): Estado {
   return conCambios(base, {
@@ -143,9 +145,10 @@ describe('comercio entre jugadores', () => {
       entrega: { MADERA: 1, LADRILLO: 0, OVEJA: 0, TRIGO: 0, MINERAL: 0 },
       pide: { MADERA: 0, LADRILLO: 0, OVEJA: 1, TRIGO: 0, MINERAL: 0 },
       rechazadoPor: [],
+      aceptadoPor: [],
     };
 
-    it('un rival con recursos suficientes acepta un trato abierto', () => {
+    it('un rival con recursos suficientes acepta un trato abierto: queda a la espera de los demás', () => {
       const estado = conCambios(estadoEnPrincipal(), { tratos: [tratoAbierto] });
       const decision = decidirAceptarTrato(estado, {
         tipo: 'ACEPTAR_TRATO',
@@ -154,7 +157,9 @@ describe('comercio entre jugadores', () => {
       });
       expect(decision.ok).toBe(true);
       if (!decision.ok) return;
-      expect(decision.eventos[0]?.tipo).toBe('TRATO_ACEPTADO');
+      expect(decision.eventos).toEqual([
+        { tipo: 'TRATO_PREACEPTADO', tratoId: 'trato-1', jugador: j1, proponente: j0 },
+      ]);
     });
 
     it('el propio proponente no puede aceptar su trato', () => {
@@ -213,6 +218,7 @@ describe('comercio entre jugadores', () => {
       entrega: { MADERA: 1, LADRILLO: 0, OVEJA: 0, TRIGO: 0, MINERAL: 0 },
       pide: { MADERA: 0, LADRILLO: 0, OVEJA: 1, TRIGO: 0, MINERAL: 0 },
       rechazadoPor: [],
+      aceptadoPor: [],
     };
 
     it('el proponente puede cancelar su propio trato', () => {
@@ -260,6 +266,7 @@ describe('comercio entre jugadores', () => {
       entrega: { MADERA: 1, LADRILLO: 0, OVEJA: 0, TRIGO: 0, MINERAL: 0 },
       pide: { MADERA: 0, LADRILLO: 0, OVEJA: 2, TRIGO: 0, MINERAL: 0 },
       rechazadoPor: [],
+      aceptadoPor: [],
     };
 
     it('un rival contraoferta pidiendo menos o cambiando el intercambio', () => {
@@ -280,6 +287,276 @@ describe('comercio entre jugadores', () => {
         expect(ev.trato.destinatario).toBe(j0);
         expect(ev.trato.contraofertaDe).toBe('trato-1');
       }
+    });
+  });
+
+  /**
+   * Una oferta a todos: cada rival acepta o rechaza. Si ya respondieron todos y aceptó uno solo, se
+   * cierra con él; si aceptan varios, el proponente elige con quién (y puede hacerlo antes de que
+   * respondan todos).
+   */
+  describe('aceptar una oferta abierta y elegir con quién se cierra', () => {
+    const abierto: Trato = {
+      id: 'trato-1',
+      proponente: j0,
+      destinatario: null,
+      entrega: { MADERA: 1, LADRILLO: 0, OVEJA: 0, TRIGO: 0, MINERAL: 0 },
+      pide: { MADERA: 0, LADRILLO: 0, OVEJA: 1, TRIGO: 0, MINERAL: 0 },
+      rechazadoPor: [],
+      aceptadoPor: [],
+    };
+    const conTrato = (cambios: Partial<Trato> = {}): Estado =>
+      conCambios(estadoEnPrincipal(), { tratos: [{ ...abierto, ...cambios }] });
+    const aceptar = (estado: Estado, jugador: string) =>
+      decidirAceptarTrato(estado, { tipo: 'ACEPTAR_TRATO', jugador, tratoId: 'trato-1' });
+    const rechazar = (estado: Estado, jugador: string) =>
+      decidirRechazarTrato(estado, { tipo: 'RECHAZAR_TRATO', jugador, tratoId: 'trato-1' });
+    const confirmar = (estado: Estado, jugador: string, con: string) =>
+      decidirConfirmarTrato(estado, {
+        tipo: 'CONFIRMAR_TRATO',
+        jugador,
+        tratoId: 'trato-1',
+        con,
+      });
+    const eventos = (d: ReturnType<typeof aceptar>) => {
+      if (!d.ok) throw new Error(`Se rechazó: ${d.motivo}`);
+      return d.eventos;
+    };
+    const cierre = (aceptante: string) => ({
+      tipo: 'TRATO_ACEPTADO',
+      tratoId: 'trato-1',
+      proponente: j0,
+      aceptante,
+      entrega: abierto.entrega,
+      pide: abierto.pide,
+    });
+
+    it('si aún faltan respuestas, aceptar solo queda registrado', () => {
+      expect(eventos(aceptar(conTrato(), j1))).toEqual([
+        { tipo: 'TRATO_PREACEPTADO', tratoId: 'trato-1', jugador: j1, proponente: j0 },
+      ]);
+    });
+
+    it('si todos los demás ya rechazaron y acepta uno, se cierra directo con él', () => {
+      const estado = conTrato({ rechazadoPor: [j2, j3] });
+      expect(eventos(aceptar(estado, j1))).toEqual([cierre(j1)]);
+    });
+
+    it('si los demás ya respondieron y hay varios que aceptaron, queda a elegir del proponente', () => {
+      const estado = conTrato({ aceptadoPor: [j2], rechazadoPor: [j3] });
+      expect(eventos(aceptar(estado, j1))).toEqual([
+        { tipo: 'TRATO_PREACEPTADO', tratoId: 'trato-1', jugador: j1, proponente: j0 },
+      ]);
+    });
+
+    it('una oferta dirigida a un solo jugador se cierra en cuanto acepta', () => {
+      const estado = conTrato({ destinatario: j1 });
+      expect(eventos(aceptar(estado, j1))).toEqual([cierre(j1)]);
+    });
+
+    it('rechazar el último pendiente cierra el trato con el único que aceptó', () => {
+      const estado = conTrato({ aceptadoPor: [j1], rechazadoPor: [j2] });
+      expect(eventos(rechazar(estado, j3))).toEqual([
+        { tipo: 'TRATO_RECHAZADO', tratoId: 'trato-1', jugador: j3 },
+        cierre(j1),
+      ]);
+    });
+
+    it('rechazar el último pendiente con varios aceptantes deja elegir al proponente', () => {
+      const estado = conTrato({ aceptadoPor: [j1, j2] });
+      expect(eventos(rechazar(estado, j3))).toEqual([
+        { tipo: 'TRATO_RECHAZADO', tratoId: 'trato-1', jugador: j3 },
+      ]);
+    });
+
+    it('rechazar sin que hayan respondido todos solo registra el rechazo', () => {
+      const estado = conTrato({ aceptadoPor: [j1] });
+      expect(eventos(rechazar(estado, j2))).toEqual([
+        { tipo: 'TRATO_RECHAZADO', tratoId: 'trato-1', jugador: j2 },
+      ]);
+    });
+
+    it('si rechazan todos, solo se registra el rechazo (el trato se cae)', () => {
+      const estado = conTrato({ rechazadoPor: [j1, j2] });
+      expect(eventos(rechazar(estado, j3))).toEqual([
+        { tipo: 'TRATO_RECHAZADO', tratoId: 'trato-1', jugador: j3 },
+      ]);
+    });
+
+    it('no se puede aceptar dos veces ni aceptar lo que ya rechazaste', () => {
+      expect(aceptar(conTrato({ aceptadoPor: [j1] }), j1)).toMatchObject({
+        ok: false,
+        motivo: 'YA_ACEPTADO',
+      });
+      expect(aceptar(conTrato({ rechazadoPor: [j1] }), j1)).toMatchObject({
+        ok: false,
+        motivo: 'YA_RECHAZADO',
+      });
+    });
+
+    it('quien ya aceptó no puede rechazar después', () => {
+      expect(rechazar(conTrato({ aceptadoPor: [j1] }), j1)).toMatchObject({
+        ok: false,
+        motivo: 'YA_ACEPTADO',
+      });
+    });
+
+    it('el proponente elige con quién cerrar, entre quienes aceptaron', () => {
+      const estado = conTrato({ aceptadoPor: [j1, j2] });
+      expect(eventos(confirmar(estado, j0, j2))).toEqual([cierre(j2)]);
+      expect(eventos(confirmar(estado, j0, j1))).toEqual([cierre(j1)]);
+    });
+
+    it('puede cerrar con el primero que aceptó sin esperar a los demás', () => {
+      const estado = conTrato({ aceptadoPor: [j1] });
+      expect(eventos(confirmar(estado, j0, j1))).toEqual([cierre(j1)]);
+    });
+
+    it('no se puede cerrar con alguien que no aceptó', () => {
+      const estado = conTrato({ aceptadoPor: [j1] });
+      expect(confirmar(estado, j0, j2)).toMatchObject({
+        ok: false,
+        motivo: 'DESTINATARIO_INVALIDO',
+      });
+    });
+
+    it('solo el proponente confirma', () => {
+      const estado = conTrato({ aceptadoPor: [j1] });
+      expect(confirmar(estado, j1, j1)).toMatchObject({ ok: false, motivo: 'NO_ES_TU_TRATO' });
+    });
+
+    it('un trato que no existe no se confirma', () => {
+      expect(
+        decidirConfirmarTrato(conTrato(), {
+          tipo: 'CONFIRMAR_TRATO',
+          jugador: j0,
+          tratoId: 'otro',
+          con: j1,
+        }),
+      ).toMatchObject({ ok: false, motivo: 'TRATO_INEXISTENTE' });
+    });
+
+    it('si a quien confirmas ya no le alcanza lo que pide la oferta, no se cierra', () => {
+      const estado = conCambios(conTrato({ aceptadoPor: [j1] }), {
+        jugadores: estadoEnPrincipal().jugadores.map((j) =>
+          j.id === j1 ? { ...j, recursos: { ...j.recursos, OVEJA: 0 } } : j,
+        ),
+      });
+      expect(confirmar(estado, j0, j1)).toMatchObject({
+        ok: false,
+        motivo: 'RECURSOS_INSUFICIENTES',
+        falta: { OVEJA: 1 },
+      });
+    });
+
+    it('si el último en rechazar deja un único aceptante al que ya no le alcanza, el trato queda abierto', () => {
+      const estado = conCambios(conTrato({ aceptadoPor: [j1], rechazadoPor: [j2] }), {
+        jugadores: estadoEnPrincipal().jugadores.map((j) =>
+          j.id === j1 ? { ...j, recursos: { ...j.recursos, OVEJA: 0 } } : j,
+        ),
+      });
+      expect(eventos(rechazar(estado, j3))).toEqual([
+        { tipo: 'TRATO_RECHAZADO', tratoId: 'trato-1', jugador: j3 },
+      ]);
+    });
+  });
+
+  describe('recorridos completos con aplicar', () => {
+    const proponer = (): Estado => {
+      const r = aplicar(mesa, estadoEnPrincipal(), {
+        tipo: 'PROPONER_TRATO',
+        jugador: j0,
+        entrega: { MADERA: 1 },
+        pide: { OVEJA: 1 },
+      });
+      if (!r.ok) throw new Error(`No se pudo proponer: ${r.motivo}`);
+      return r.estado;
+    };
+    const paso = (estado: Estado, accion: Parameters<typeof aplicar>[2]): Estado => {
+      const r = aplicar(mesa, estado, accion);
+      if (!r.ok) throw new Error(`Se rechazó ${accion.tipo}: ${r.motivo}`);
+      return r.estado;
+    };
+    const manoDe = (estado: Estado, id: string) =>
+      estado.jugadores.find((j) => j.id === id)!.recursos;
+    const idDelTrato = (estado: Estado): string => estado.tratos[0]!.id;
+
+    it('varios aceptan: el trato espera, y al elegir a uno se hace el intercambio con ese', () => {
+      let estado = proponer();
+      const tratoId = idDelTrato(estado);
+      estado = paso(estado, { tipo: 'ACEPTAR_TRATO', jugador: j1, tratoId });
+      estado = paso(estado, { tipo: 'ACEPTAR_TRATO', jugador: j2, tratoId });
+      estado = paso(estado, { tipo: 'RECHAZAR_TRATO', jugador: j3, tratoId });
+      // Respondieron todos y aceptaron dos: sigue abierto, esperando que el proponente elija.
+      expect(estado.tratos).toHaveLength(1);
+      expect(estado.tratos[0]!.aceptadoPor).toEqual([j1, j2]);
+
+      const antes1 = manoDe(estado, j1);
+      estado = paso(estado, { tipo: 'CONFIRMAR_TRATO', jugador: j0, tratoId, con: j2 });
+      expect(estado.tratos).toHaveLength(0);
+      expect(manoDe(estado, j0)).toMatchObject({ MADERA: 1, OVEJA: 1 });
+      expect(manoDe(estado, j2)).toMatchObject({ MADERA: 2, OVEJA: 0 });
+      expect(manoDe(estado, j1)).toEqual(antes1); // al que no elegí no le pasa nada
+    });
+
+    it('todos rechazan menos uno: se cierra solo con ese, aunque acepte el último', () => {
+      let estado = proponer();
+      const tratoId = idDelTrato(estado);
+      estado = paso(estado, { tipo: 'RECHAZAR_TRATO', jugador: j2, tratoId });
+      estado = paso(estado, { tipo: 'RECHAZAR_TRATO', jugador: j3, tratoId });
+      estado = paso(estado, { tipo: 'ACEPTAR_TRATO', jugador: j1, tratoId });
+      expect(estado.tratos).toHaveLength(0);
+      expect(manoDe(estado, j0)).toMatchObject({ MADERA: 1, OVEJA: 1 });
+      expect(manoDe(estado, j1)).toMatchObject({ MADERA: 1, OVEJA: 1 });
+    });
+
+    it('uno acepta primero y los demás rechazan después: se cierra con el que aceptó', () => {
+      let estado = proponer();
+      const tratoId = idDelTrato(estado);
+      estado = paso(estado, { tipo: 'ACEPTAR_TRATO', jugador: j1, tratoId });
+      expect(estado.tratos).toHaveLength(1);
+      estado = paso(estado, { tipo: 'RECHAZAR_TRATO', jugador: j2, tratoId });
+      expect(estado.tratos).toHaveLength(1);
+      estado = paso(estado, { tipo: 'RECHAZAR_TRATO', jugador: j3, tratoId });
+      expect(estado.tratos).toHaveLength(0);
+      expect(manoDe(estado, j1)).toMatchObject({ MADERA: 1, OVEJA: 1 });
+    });
+
+    it('si rechazan todos, la oferta desaparece y nadie intercambia', () => {
+      let estado = proponer();
+      const tratoId = idDelTrato(estado);
+      const manoInicial = manoDe(estado, j0);
+      for (const j of [j1, j2, j3]) {
+        estado = paso(estado, { tipo: 'RECHAZAR_TRATO', jugador: j, tratoId });
+      }
+      expect(estado.tratos).toHaveLength(0);
+      expect(manoDe(estado, j0)).toEqual(manoInicial);
+    });
+
+    it('el proponente puede cerrar con el primero que aceptó sin esperar a los demás', () => {
+      let estado = proponer();
+      const tratoId = idDelTrato(estado);
+      estado = paso(estado, { tipo: 'ACEPTAR_TRATO', jugador: j1, tratoId });
+      estado = paso(estado, { tipo: 'CONFIRMAR_TRATO', jugador: j0, tratoId, con: j1 });
+      expect(estado.tratos).toHaveLength(0);
+      expect(manoDe(estado, j1)).toMatchObject({ MADERA: 1, OVEJA: 1 });
+    });
+
+    it('una oferta a un solo jugador se cierra al aceptar', () => {
+      const propuesto = paso(estadoEnPrincipal(), {
+        tipo: 'PROPONER_TRATO',
+        jugador: j0,
+        entrega: { MADERA: 1 },
+        pide: { OVEJA: 1 },
+        destinatario: j1,
+      });
+      const estado = paso(propuesto, {
+        tipo: 'ACEPTAR_TRATO',
+        jugador: j1,
+        tratoId: idDelTrato(propuesto),
+      });
+      expect(estado.tratos).toHaveLength(0);
+      expect(manoDe(estado, j1)).toMatchObject({ MADERA: 1, OVEJA: 1 });
     });
   });
 });

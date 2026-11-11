@@ -86,8 +86,14 @@ function aplicarEvento(estado: Draft<Estado>, evento: Evento): void {
         entrega: { ...evento.trato.entrega },
         pide: { ...evento.trato.pide },
         rechazadoPor: [...evento.trato.rechazadoPor],
+        aceptadoPor: [...(evento.trato.aceptadoPor ?? [])],
       });
       return;
+    case 'TRATO_PREACEPTADO': {
+      const trato = estado.tratos.find((t) => t.id === evento.tratoId);
+      if (trato) trato.aceptadoPor = [...(trato.aceptadoPor ?? []), evento.jugador];
+      return;
+    }
     case 'TRATO_ACEPTADO': {
       const proponente = jugadorDe(estado, evento.proponente);
       const aceptante = jugadorDe(estado, evento.aceptante);

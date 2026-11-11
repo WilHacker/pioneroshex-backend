@@ -88,8 +88,8 @@ describe('Comercio solo con el banco', () => {
     const r = decidir(mesa, estado, {
       tipo: 'CAMBIAR_CON_BANCA',
       jugador: yo,
-      entrega: 'MADERA',
-      recibe: 'OVEJA',
+      entrega: { MADERA: 4 },
+      recibe: { OVEJA: 1 },
     });
     expect(r.ok).toBe(true);
   });
@@ -252,8 +252,8 @@ describe('Tope de ofertas por turno', () => {
     const tras = aceptar(mesa, estado, {
       tipo: 'CAMBIAR_CON_BANCA',
       jugador: yo,
-      entrega: 'MADERA',
-      recibe: 'OVEJA',
+      entrega: { MADERA: 4 },
+      recibe: { OVEJA: 1 },
     });
     expect(decidir(mesa, tras, proponer(b, 'LADRILLO', 'TRIGO')).ok).toBe(true);
   });

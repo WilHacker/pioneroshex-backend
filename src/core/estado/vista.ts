@@ -120,6 +120,7 @@ export function vistaPara(estado: Estado, jugadorId: JugadorId | null): Vista {
         entrega: { ...t.entrega },
         pide: { ...t.pide },
         rechazadoPor: [...t.rechazadoPor],
+        aceptadoPor: [...(t.aceptadoPor ?? [])],
       })),
     edificios: Object.fromEntries(Object.entries(estado.edificios).map(([v, e]) => [v, { ...e }])),
     caminos: { ...estado.caminos },
